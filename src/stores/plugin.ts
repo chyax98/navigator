@@ -4,12 +4,13 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Plugin, PluginStatus } from '@/types/plugin'
+import { PluginStatus } from '@/types/plugin'
+import type { HookHandler, Plugin } from '@/types/plugin'
 
 export const usePluginStore = defineStore('plugin', () => {
   // State
   const plugins = ref<Map<string, Plugin>>(new Map())
-  const hooks = ref<Map<string, Function[]>>(new Map())
+  const hooks = ref<Map<string, HookHandler[]>>(new Map())
 
   // Getters
   const installedPlugins = computed(() => {
@@ -34,7 +35,9 @@ export const usePluginStore = defineStore('plugin', () => {
       // 注册钩子
       if (plugin.hooks) {
         Object.entries(plugin.hooks).forEach(([hookName, handler]) => {
-          addHook(hookName, handler)
+          if (typeof handler === 'function') {
+            addHook(hookName, handler)
+          }
         })
       }
 
@@ -42,8 +45,6 @@ export const usePluginStore = defineStore('plugin', () => {
       if (plugin.hooks?.onInstall) {
         await plugin.hooks.onInstall()
       }
-
-      console.log(`Plugin ${plugin.meta.name} registered successfully`)
     } catch (error) {
       console.error(`Failed to register plugin ${plugin.meta.name}:`, error)
       throw error
@@ -65,14 +66,14 @@ export const usePluginStore = defineStore('plugin', () => {
       // 移除钩子
       if (plugin.hooks) {
         Object.entries(plugin.hooks).forEach(([hookName, handler]) => {
-          removeHook(hookName, handler)
+          if (typeof handler === 'function') {
+            removeHook(hookName, handler)
+          }
         })
       }
 
       // 移除插件
       plugins.value.delete(pluginName)
-
-      console.log(`Plugin ${pluginName} unregistered successfully`)
     } catch (error) {
       console.error(`Failed to unregister plugin ${pluginName}:`, error)
       throw error
@@ -92,8 +93,6 @@ export const usePluginStore = defineStore('plugin', () => {
       }
 
       plugin.config.enabled = true
-
-      console.log(`Plugin ${pluginName} activated successfully`)
     } catch (error) {
       console.error(`Failed to activate plugin ${pluginName}:`, error)
       throw error
@@ -113,8 +112,6 @@ export const usePluginStore = defineStore('plugin', () => {
       }
 
       plugin.config.enabled = false
-
-      console.log(`Plugin ${pluginName} deactivated successfully`)
     } catch (error) {
       console.error(`Failed to deactivate plugin ${pluginName}:`, error)
       throw error
@@ -142,14 +139,14 @@ export const usePluginStore = defineStore('plugin', () => {
   }
 
   // Hook 系统
-  function addHook(event: string, handler: Function) {
+  function addHook(event: string, handler: HookHandler) {
     if (!hooks.value.has(event)) {
       hooks.value.set(event, [])
     }
     hooks.value.get(event)!.push(handler)
   }
 
-  function removeHook(event: string, handler: Function) {
+  function removeHook(event: string, handler: HookHandler) {
     const handlers = hooks.value.get(event)
     if (handlers) {
       const index = handlers.indexOf(handler)
@@ -159,7 +156,7 @@ export const usePluginStore = defineStore('plugin', () => {
     }
   }
 
-  function emit(event: string, data?: any) {
+  function emit(event: string, data?: unknown) {
     const handlers = hooks.value.get(event)
     if (handlers) {
       handlers.forEach(handler => {
@@ -172,11 +169,11 @@ export const usePluginStore = defineStore('plugin', () => {
     }
   }
 
-  function on(event: string, handler: Function) {
+  function on(event: string, handler: HookHandler) {
     addHook(event, handler)
   }
 
-  function off(event: string, handler: Function) {
+  function off(event: string, handler: HookHandler) {
     removeHook(event, handler)
   }
 

@@ -1,15 +1,14 @@
 <template>
-  <n-config-provider :theme="theme" :locale="zhCN" :date-locale="dateZhCN">
+  <n-config-provider
+    :theme="theme"
+    :theme-overrides="themeOverrides"
+    :locale="zhCN"
+    :date-locale="dateZhCN"
+  >
     <n-message-provider>
       <n-dialog-provider>
         <n-loading-bar-provider>
-          <app-layout />
-          <ContextMenu
-            :visible="contextMenuVisible"
-            :x="contextMenuX"
-            :y="contextMenuY"
-            @close="closeContextMenu"
-          />
+          <AppContent />
         </n-loading-bar-provider>
       </n-dialog-provider>
     </n-message-provider>
@@ -17,22 +16,68 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { NConfigProvider, NMessageProvider, NDialogProvider, NLoadingBarProvider, darkTheme, zhCN, dateZhCN } from 'naive-ui'
-import AppLayout from './components/layout/AppLayout.vue'
-import ContextMenu from './components/common/ContextMenu.vue'
+import type { GlobalThemeOverrides } from 'naive-ui'
+import AppContent from './components/AppContent.vue'
 import { useConfigStore } from './stores/config'
 import { useBookmarkStore } from './stores/bookmark'
-import { useMessage } from 'naive-ui'
 
 const configStore = useConfigStore()
 const bookmarkStore = useBookmarkStore()
-const message = useMessage()
 
-// 右键菜单状态
-const contextMenuVisible = ref(false)
-const contextMenuX = ref(0)
-const contextMenuY = ref(0)
+// 低调商务风格主题配置
+const themeOverrides: GlobalThemeOverrides = {
+  common: {
+    // 主色调：低调的蓝灰色（类似 Chrome）
+    primaryColor: '#5F6368',
+    primaryColorHover: '#4D5156',
+    primaryColorPressed: '#3C4043',
+    primaryColorSuppl: '#80868B',
+
+    // 信息色：柔和的蓝色
+    infoColor: '#1A73E8',
+    infoColorHover: '#1765CC',
+    infoColorPressed: '#1557B0',
+    infoColorSuppl: '#4285F4',
+
+    // 成功色：低调的深绿
+    successColor: '#137333',
+    successColorHover: '#0D652D',
+    successColorPressed: '#0A5325',
+    successColorSuppl: '#188038',
+
+    // 警告色：适度的橙色
+    warningColor: '#EA8600',
+    warningColorHover: '#C77700',
+    warningColorPressed: '#A86400',
+    warningColorSuppl: '#F9AB00',
+
+    // 错误色：柔和的红色
+    errorColor: '#C5221F',
+    errorColorHover: '#A5191D',
+    errorColorPressed: '#8C141A',
+    errorColorSuppl: '#D93025',
+
+    // 边框和背景色
+    borderRadius: '8px'
+  },
+  Button: {
+    // 按钮圆角更圆润
+    borderRadiusMedium: '8px',
+    borderRadiusSmall: '6px',
+    borderRadiusLarge: '10px'
+  },
+  Card: {
+    borderRadius: '12px'
+  },
+  Input: {
+    borderRadius: '8px'
+  },
+  Select: {
+    borderRadius: '8px'
+  }
+}
 
 // 主题配置
 const theme = computed(() => {
@@ -45,7 +90,7 @@ const theme = computed(() => {
 // 初始化应用
 onMounted(async () => {
   // 加载配置
-  configStore.loadConfig()
+  await configStore.loadConfig()
 
   // 应用主题
   const themeValue = configStore.config.theme
@@ -58,74 +103,7 @@ onMounted(async () => {
 
   // 加载书签数据
   await bookmarkStore.loadBookmarks()
-
-  // 监听全局事件
-  setupGlobalListeners()
 })
-
-// 设置全局事件监听
-function setupGlobalListeners() {
-  // 右键菜单
-  document.addEventListener('contextmenu', handleContextMenu)
-  document.addEventListener('click', handleClick)
-
-  // 快捷键
-  document.addEventListener('keydown', handleKeydown)
-
-  // 自定义事件
-  document.addEventListener('add-bookmark', handleAddBookmark)
-  document.addEventListener('add-bookmark-from-clipboard', handleAddBookmarkFromClipboard)
-}
-
-// 清理事件监听
-onUnmounted(() => {
-  document.removeEventListener('contextmenu', handleContextMenu)
-  document.removeEventListener('click', handleClick)
-  document.removeEventListener('keydown', handleKeydown)
-  document.removeEventListener('add-bookmark', handleAddBookmark)
-  document.removeEventListener('add-bookmark-from-clipboard', handleAddBookmarkFromClipboard)
-})
-
-// 右键菜单处理
-function handleContextMenu(e: MouseEvent) {
-  // 防止在输入框、链接等元素上显示
-  const target = e.target as HTMLElement
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'A') {
-    return
-  }
-
-  e.preventDefault()
-  contextMenuX.value = e.clientX
-  contextMenuY.value = e.clientY
-  contextMenuVisible.value = true
-}
-
-function handleClick() {
-  contextMenuVisible.value = false
-}
-
-function closeContextMenu() {
-  contextMenuVisible.value = false
-}
-
-// 快捷键处理
-function handleKeydown(e: KeyboardEvent) {
-  // Ctrl+D 添加书签
-  if (e.ctrlKey && e.key === 'd') {
-    e.preventDefault()
-    handleAddBookmark()
-  }
-}
-
-// 添加书签处理
-function handleAddBookmark() {
-  message.info('添加书签功能开发中...')
-}
-
-function handleAddBookmarkFromClipboard(e: any) {
-  const { url } = e.detail
-  message.info(`从剪贴板添加书签: ${url}`)
-}
 </script>
 
 <style>

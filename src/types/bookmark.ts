@@ -2,6 +2,9 @@
  * 书签数据类型定义
  */
 
+// 书签来源类型
+export type BookmarkSource = 'user' | 'chrome'
+
 export interface Bookmark {
   id: string
   title: string
@@ -10,12 +13,20 @@ export interface Bookmark {
   favicon?: string
   categoryId: string
   tags: string[]
+  notes?: string // Markdown 格式笔记
   createdAt: Date
   updatedAt: Date
   isPrivate: boolean
   clickCount: number
   lastVisited?: Date
+  isPinned?: boolean
+  pinnedAt?: Date
+  sort: number
+  source: BookmarkSource // 书签来源：user=用户创建，chrome=Chrome同步
 }
+
+// 分类来源类型
+export type CategorySource = 'user' | 'chrome'
 
 export interface Category {
   id: string
@@ -25,9 +36,12 @@ export interface Category {
   parentId?: string // 支持嵌套分类
   sort: number
   isPrivate: boolean
+  // 是否置顶到主页
+  isPinned?: boolean
   children?: Category[] // 子分类（用于UI展示）
   level?: number // 层级深度，用于UI缩进
   isExpanded?: boolean // 是否展开（UI状态）
+  source: CategorySource // 分类来源：user=用户创建，chrome=Chrome同步
 }
 
 export interface Tag {
@@ -47,4 +61,5 @@ export interface SearchOptions {
   categoryId?: string
   tags?: string[]
   isPrivate?: boolean
+  limit?: number
 }

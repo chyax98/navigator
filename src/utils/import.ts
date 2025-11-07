@@ -6,6 +6,12 @@
 import type { Bookmark, Category } from '@/types/bookmark'
 import { nanoid } from 'nanoid'
 
+function getFaviconUrl(_rawUrl: string | undefined | null): string | undefined {
+  // 不再生成外部 favicon URL，返回 undefined
+  // 让 useFavicon composable 和 favicon-cache 服务自动处理
+  return undefined
+}
+
 interface ChromeBookmarkNode {
   children?: ChromeBookmarkNode[]
   date_added?: string
@@ -97,7 +103,8 @@ function parseBookmarkNode(
       name: node.name || 'Unnamed',
       parentId,
       sort: categories.length,
-      isPrivate: false
+      isPrivate: false,
+      source: 'user'
     })
 
     // 递归处理子节点
@@ -107,18 +114,22 @@ function parseBookmarkNode(
       })
     }
   } else if (node.type === 'url' && node.url) {
+    const favicon = getFaviconUrl(node.url)
+
     bookmarks.push({
       id: nanoid(),
       title: node.name || 'Untitled',
       url: node.url,
       description: '',
-      favicon: `https://www.google.com/s2/favicons?domain=${new URL(node.url).hostname}&sz=32`,
+      ...(favicon ? { favicon } : {}),
       categoryId,
       tags: [],
       createdAt: node.date_added ? new Date(parseInt(node.date_added) / 1000) : new Date(),
       updatedAt: new Date(),
       isPrivate: false,
-      clickCount: 0
+      clickCount: 0,
+      sort: bookmarks.length,
+      source: 'user'
     })
   }
 }
@@ -155,7 +166,8 @@ export async function parseHTMLBookmarks(file: File): Promise<{ bookmarks: Bookm
                 name: h3.textContent || 'Unnamed',
                 parentId,
                 sort: categories.length,
-                isPrivate: false
+                isPrivate: false,
+                source: 'user'
               })
 
               const dl = item.querySelector('dl')
@@ -166,18 +178,22 @@ export async function parseHTMLBookmarks(file: File): Promise<{ bookmarks: Bookm
               // 这是一个书签
               const url = a.getAttribute('href') || ''
               if (url) {
+                const favicon = getFaviconUrl(url)
+
                 bookmarks.push({
                   id: nanoid(),
                   title: a.textContent || 'Untitled',
                   url,
                   description: '',
-                  favicon: `https://www.google.com/s2/favicons?domain=${new URL(url).hostname}&sz=32`,
+                  ...(favicon ? { favicon } : {}),
                   categoryId,
                   tags: [],
                   createdAt: new Date(),
                   updatedAt: new Date(),
                   isPrivate: false,
-                  clickCount: 0
+                  clickCount: 0,
+                  sort: bookmarks.length,
+                  source: 'user'
                 })
               }
             }
@@ -191,7 +207,8 @@ export async function parseHTMLBookmarks(file: File): Promise<{ bookmarks: Bookm
             id: rootId,
             name: 'Imported',
             sort: 0,
-            isPrivate: false
+            isPrivate: false,
+            source: 'user'
           })
           parseElement(rootDl, rootId)
         }

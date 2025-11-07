@@ -9,18 +9,6 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '首页' }
   },
   {
-    path: '/settings',
-    name: 'settings',
-    component: () => import('@/views/Settings.vue'),
-    meta: { title: '设置' }
-  },
-  {
-    path: '/import',
-    name: 'import',
-    component: () => import('@/views/Import.vue'),
-    meta: { title: '导入书签' }
-  },
-  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }
@@ -32,7 +20,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // 设置页面标题
   if (to.meta.title) {
     document.title = `${to.meta.title} - Navigator`

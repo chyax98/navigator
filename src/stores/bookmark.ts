@@ -234,21 +234,35 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       ? (configStore.config.homepageSortType || 'default')
       : (configStore.config.categorySortType || 'default')
 
+    let filtered: Bookmark[] = []
+
     // 主页视图：显示置顶书签
     if (isHomepage) {
-      const filtered = bookmarks.value.filter(b => b.isPinned)
-      return sortBookmarks(filtered, sortType)
+      filtered = bookmarks.value.filter(b => b.isPinned)
     }
-
     // Chrome 书签栏视图：显示 Chrome 书签（从 bookmarks.value 中过滤）
-    if (selectedCategoryId.value === CHROME_BOOKMARKS_BAR_CATEGORY_ID) {
-      const filtered = bookmarks.value.filter(b => b.source === 'chrome')
-      return sortBookmarks(filtered, sortType)
+    else if (selectedCategoryId.value === CHROME_BOOKMARKS_BAR_CATEGORY_ID) {
+      filtered = bookmarks.value.filter(b => b.source === 'chrome')
+    }
+    // 分类视图：显示对应分类的书签
+    else {
+      filtered = bookmarks.value.filter(b => b.categoryId === selectedCategoryId.value)
     }
 
-    // 分类视图：显示对应分类的书签
-    const filtered = bookmarks.value.filter(b => b.categoryId === selectedCategoryId.value)
-    return sortBookmarks(filtered, sortType)
+    // URL 去重：同一个 URL 只保留一个书签（优先保留用户创建的）
+    const uniqueByUrl = new Map<string, Bookmark>()
+    filtered.forEach(bookmark => {
+      const normalizedUrl = normalizeUrl(bookmark.url)
+      const existing = uniqueByUrl.get(normalizedUrl)
+
+      // 如果没有现存书签，或现存的是 Chrome 书签而当前是用户书签，则替换
+      if (!existing || (existing.source === 'chrome' && bookmark.source === 'user')) {
+        uniqueByUrl.set(normalizedUrl, bookmark)
+      }
+    })
+
+    const deduplicated = Array.from(uniqueByUrl.values())
+    return sortBookmarks(deduplicated, sortType)
   })
 
   const categorizedBookmarks = computed(() => {

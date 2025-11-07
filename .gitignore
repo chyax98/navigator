@@ -29,9 +29,15 @@ dist-extension
 .env.local
 .env.*.local
 
-# Test artifacts (Playwright)
-playwright-report/
+# Test artifacts
 test-results/
+playwright-report/
+tests/
+__tests__/
+*.spec.ts
+*.spec.js
+*.test.ts
+*.test.js
 
 # Coverage reports
 coverage/
@@ -57,4 +63,3 @@ specs/
 dist-extension/
 navigator-extension.zip
 public/icons/*.png
-playwright-report/

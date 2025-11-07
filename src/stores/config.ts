@@ -7,6 +7,8 @@ import { ref } from 'vue'
 import type { AppConfig, SessionData } from '@/types/config'
 import { defaultConfig } from '@/types/config'
 import { storageManager } from '@/utils/storage'
+import { embeddingService } from '@/utils/embedding'
+import { aiServiceManager } from '@/services/ai/ai-service-manager'
 
 export const useConfigStore = defineStore('config', () => {
   // State
@@ -18,42 +20,35 @@ export const useConfigStore = defineStore('config', () => {
   })
 
   // Actions
-  function loadConfig() {
-    const saved = storageManager.getConfig()
+  async function loadConfig() {
+    const saved = await storageManager.getConfig()
     if (saved) {
       config.value = { ...defaultConfig, ...saved }
-      // 确保主题配置存在
-      if (!config.value.themeConfig) {
-        config.value.themeConfig = { ...defaultConfig.themeConfig }
-      }
     }
-    // 应用主题设置到DOM
-    applyCustomTheme()
+
+    // 异步同步AI客户端配置
+    await syncAiClients()
   }
 
   function updateConfig(updates: Partial<AppConfig>) {
     config.value = { ...config.value, ...updates }
-    storageManager.saveConfig(config.value)
-    // 如果更新了主题配置，应用到DOM
-    if (updates.themeConfig) {
-      applyCustomTheme()
-    }
+    void storageManager.saveConfig(config.value)
   }
 
   function setTheme(theme: 'light' | 'dark' | 'auto') {
     config.value.theme = theme
-    storageManager.saveConfig(config.value)
+    void storageManager.saveConfig(config.value)
     applyTheme(theme)
   }
 
   function setLanguage(language: string) {
     config.value.language = language
-    storageManager.saveConfig(config.value)
+    void storageManager.saveConfig(config.value)
   }
 
   function togglePasswordProtection(enabled: boolean) {
     config.value.passwordEnabled = enabled
-    storageManager.saveConfig(config.value)
+    void storageManager.saveConfig(config.value)
   }
 
   function authenticate(success: boolean) {
@@ -74,10 +69,87 @@ export const useConfigStore = defineStore('config', () => {
 
   function resetConfig() {
     config.value = { ...defaultConfig }
-    storageManager.saveConfig(config.value)
+    void storageManager.saveConfig(config.value)
+    void syncAiClients()
+  }
+
+  // AI API配置方法
+  async function updateSemanticSearchConfig(updates: {
+    enableSemanticSearch?: boolean
+    semanticWeight?: number
+    keywordWeight?: number
+    aiApiProvider?: 'openai' | 'custom'
+    openaiApiKey?: string
+    customApiBaseUrl?: string
+    customApiKey?: string
+    embeddingModel?: string
+    chatModel?: string
+  }): Promise<void> {
+    config.value = {
+      ...config.value,
+      ...updates
+    }
+    void storageManager.saveConfig(config.value)
+    await syncAiClients()
+  }
+
+  function isSemanticSearchEnabled(): boolean {
+    return config.value.enableSemanticSearch || false
+  }
+
+  function getSemanticSearchConfig() {
+    const provider = config.value.aiApiProvider || 'openai'
+    const apiKey = provider === 'openai'
+      ? config.value.openaiApiKey?.trim()
+      : config.value.customApiKey?.trim()
+
+    return {
+      enableSemanticSearch: config.value.enableSemanticSearch || false,
+      semanticWeight: config.value.semanticWeight || 0.6,
+      keywordWeight: config.value.keywordWeight || 0.4,
+      hasApiKey: !!apiKey
+    }
+  }
+
+  // 排序配置方法
+  function setHomepageSortType(sortType: import('@/types/sort').BookmarkSortType) {
+    config.value.homepageSortType = sortType
+    void storageManager.saveConfig(config.value)
+  }
+
+  function setCategorySortType(sortType: import('@/types/sort').BookmarkSortType) {
+    config.value.categorySortType = sortType
+    void storageManager.saveConfig(config.value)
   }
 
   // Helper functions
+  async function syncAiClients(): Promise<void> {
+    try {
+      const provider = config.value.aiApiProvider || 'openai'
+      const apiKey = (provider === 'openai'
+        ? config.value.openaiApiKey
+        : config.value.customApiKey) || ''
+      const baseURL = provider === 'custom'
+        ? (config.value.customApiBaseUrl?.trim() || undefined)
+        : undefined
+      const embeddingModel = config.value.embeddingModel || 'text-embedding-3-small'
+      const chatModel = config.value.chatModel || 'gpt-3.5-turbo'
+
+      aiServiceManager.updateConfig({
+        provider,
+        apiKey,
+        baseURL,
+        embeddingModel,
+        chatModel
+      })
+
+      embeddingService.resetCache()
+      aiServiceManager.resetClient()
+    } catch (error) {
+      console.error('同步AI客户端配置失败:', error)
+    }
+  }
+
   function applyTheme(theme: 'light' | 'dark' | 'auto') {
     const root = document.documentElement
 
@@ -87,34 +159,6 @@ export const useConfigStore = defineStore('config', () => {
     } else {
       root.setAttribute('data-theme', theme)
     }
-  }
-
-  function applyCustomTheme() {
-    const root = document.documentElement
-    const theme = config.value.themeConfig
-
-    if (!theme) return
-
-    // 应用CSS变量
-    root.style.setProperty('--primary-color', theme.primaryColor)
-    root.style.setProperty('--accent-color', theme.accentColor)
-
-    // 应用圆角
-    const radiusMap = { small: '6px', medium: '12px', large: '16px' }
-    root.style.setProperty('--border-radius', radiusMap[theme.borderRadius])
-
-    // 应用字体大小
-    const fontMap = { small: '13px', medium: '14px', large: '16px' }
-    root.style.setProperty('--font-size', fontMap[theme.fontSize])
-
-    // 应用网格列数
-    root.style.setProperty('--grid-columns', theme.gridColumns.toString())
-
-    // 应用卡片间距
-    root.style.setProperty('--card-spacing', `${theme.cardSpacing}px`)
-
-    // 应用卡片阴影
-    root.style.setProperty('--card-shadow-opacity', theme.cardShadow ? '1' : '0')
   }
 
   function generateSessionId(): string {
@@ -135,6 +179,16 @@ export const useConfigStore = defineStore('config', () => {
     authenticate,
     logout,
     isAuthenticated,
-    resetConfig
+    resetConfig,
+
+    // 语义搜索相关
+    updateSemanticSearchConfig,
+    isSemanticSearchEnabled,
+    getSemanticSearchConfig,
+    syncAiClients,
+
+    // 排序相关
+    setHomepageSortType,
+    setCategorySortType
   }
 })

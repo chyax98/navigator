@@ -1,0 +1,129 @@
+/**
+ * Navigator Design Token System
+ * 统一的设计系统变量，支持亮色和暗色主题
+ */
+
+:root {
+  /* ========== 间距系统 ========== */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+
+  /* ========== 圆角系统 ========== */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* ========== 过渡系统 ========== */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ========== 阴影系统（亮色主题）========== */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08),
+                0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 6px rgba(15, 23, 42, 0.1),
+                0 2px 4px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 10px 15px rgba(15, 23, 42, 0.12),
+                0 4px 6px rgba(15, 23, 42, 0.08);
+  --shadow-xl: 0 20px 25px rgba(15, 23, 42, 0.15),
+                0 8px 10px rgba(15, 23, 42, 0.1);
+
+  /* ========== 色彩层级（亮色主题）========== */
+  --color-bg-0: var(--n-body-color); /* 最底层背景 */
+  --color-bg-1: var(--n-color); /* 一级内容背景（卡片、面板） */
+  --color-bg-2: var(--n-color-embedded); /* 二级内容背景（嵌套元素） */
+  --color-border-light: rgba(15, 23, 42, 0.08); /* 浅色边框 */
+  --color-border: var(--n-border-color); /* 标准边框 */
+  --color-border-hover: var(--n-border-color-hover); /* 悬停边框 */
+
+  /* ========== 焦点环 ========== */
+  --focus-ring: 0 0 0 3px var(--n-primary-color-suppl);
+
+  /* ========== 侧边栏设计令牌 ========== */
+  --sidebar-bg-color: #ffffff;
+  --sidebar-item-hover: rgba(95, 99, 104, 0.08);
+  --sidebar-item-active: #5F6368;
+  --sidebar-text-color: #3c4043;
+  --sidebar-text-active: #ffffff;
+  --sidebar-text-secondary: rgba(60, 64, 67, 0.6);
+
+  /* ========== 拖拽系统 ========== */
+  --drag-indicator-color: #5F6368;
+  --drag-indicator-bg: rgba(95, 99, 104, 0.06);
+  --drag-indicator-border: rgba(95, 99, 104, 0.24);
+  --drag-handle-color: rgba(95, 99, 104, 0.38);
+  --drag-handle-hover: #5F6368;
+  --drag-ghost-opacity: 0.5;
+
+  /* ========== 兼容旧变量名 ========== */
+  --border-radius: var(--radius-sm);
+  --border-radius-sm: var(--radius-xs);
+  --border-radius-lg: var(--radius-md);
+  --primary-color: var(--n-primary-color);
+  --primary-hover: var(--n-primary-color-hover);
+}
+
+/* ========== 暗色主题覆盖 ========== */
+[data-theme='dark'] {
+  /* 阴影系统（暗色主题 - 更深、更柔和）*/
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3),
+                0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4),
+                0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5),
+                0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6),
+                0 8px 10px rgba(0, 0, 0, 0.5);
+
+  /* 色彩层级（暗色主题）*/
+  --color-border-light: rgba(255, 255, 255, 0.04);
+
+  /* 侧边栏（暗色主题）*/
+  --sidebar-bg-color: var(--n-color);
+  --sidebar-item-hover: rgba(255, 255, 255, 0.08);
+  --sidebar-item-active: var(--n-primary-color);
+  --sidebar-text-color: rgba(255, 255, 255, 0.82);
+  --sidebar-text-active: #ffffff;
+  --sidebar-text-secondary: rgba(255, 255, 255, 0.45);
+
+  /* 拖拽系统（暗色主题）*/
+  --drag-indicator-bg: rgba(255, 255, 255, 0.05);
+  --drag-indicator-border: rgba(255, 255, 255, 0.18);
+  --drag-handle-color: rgba(255, 255, 255, 0.38);
+  --drag-handle-hover: rgba(255, 255, 255, 0.82);
+}
+
+/* ========== 全局动画增强 ========== */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ========== 焦点可访问性 ========== */
+*:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* ========== 滚动条样式 ========== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--n-scrollbar-color);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--n-scrollbar-color-hover);
+}

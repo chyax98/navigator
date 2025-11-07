@@ -5,6 +5,8 @@
 import type { Component } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 
+export type HookHandler = (data?: unknown) => void | Promise<void>
+
 export interface PluginMeta {
   name: string
   version: string
@@ -47,7 +49,7 @@ export interface PluginManager {
   deactivate(pluginName: string): Promise<void>
   getPlugin(pluginName: string): Plugin | undefined
   listPlugins(): Plugin[]
-  emit(event: string, data?: any): void
-  on(event: string, handler: Function): void
-  off(event: string, handler: Function): void
+  emit(event: string, data?: unknown): void
+  on(event: string, handler: HookHandler): void
+  off(event: string, handler: HookHandler): void
 }

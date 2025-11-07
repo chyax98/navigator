@@ -4,6 +4,7 @@ import router from './router'
 import App from './App.vue'
 
 // 导入样式
+import './styles/design-tokens.css'
 import './styles/main.css'
 
 // 创建应用实例
@@ -16,14 +17,5 @@ app.use(pinia)
 // 注册路由
 app.use(router)
 
-// 在应用挂载前初始化配置
-async function initializeApp() {
-  const { useConfigStore } = await import('@/stores/config')
-  const configStore = useConfigStore()
-  configStore.loadConfig()
-}
-
-// 初始化并挂载应用
-initializeApp().then(() => {
-  app.mount('#app')
-})
+// 挂载应用（配置和数据初始化在 App.vue 的 onMounted 中进行）
+app.mount('#app')

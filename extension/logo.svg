@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#18a058;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#36ad6a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆形 -->
+  <circle cx="50" cy="50" r="45" fill="url(#gradient)"/>
+
+  <!-- 指南针指针 -->
+  <g transform="translate(50, 50)">
+    <!-- 北针（红色） -->
+    <path d="M 0,-30 L 6,0 L 0,-3 L -6,0 Z" fill="#ff4757" stroke="#fff" stroke-width="1"/>
+
+    <!-- 南针（白色） -->
+    <path d="M 0,30 L -6,0 L 0,3 L 6,0 Z" fill="#fff" stroke="#ddd" stroke-width="1"/>
+
+    <!-- 中心圆点 -->
+    <circle cx="0" cy="0" r="4" fill="#fff" stroke="#18a058" stroke-width="1"/>
+  </g>
+
+  <!-- 外圈刻度 -->
+  <g transform="translate(50, 50)" fill="none" stroke="#fff" stroke-width="2" opacity="0.8">
+    <line x1="0" y1="-42" x2="0" y2="-38" />
+    <line x1="42" y1="0" x2="38" y2="0" />
+    <line x1="0" y1="42" x2="0" y2="38" />
+    <line x1="-42" y1="0" x2="-38" y2="0" />
+  </g>
+</svg>

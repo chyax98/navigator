@@ -9,13 +9,17 @@ Auto-generated from all feature plans. Last updated: 2025-11-03
 ## Project Structure
 
 ```text
-src/
-tests/
+src/              # 源代码
+extension/        # Chrome 扩展
+public/           # 静态资源
 ```
 
 ## Commands
 
-npm test && npm run lint
+npm run dev       # 开发模式
+npm run build     # 生产构建
+npm run lint      # 代码检查
+npm run type-check # 类型检查
 
 ## Code Style
 

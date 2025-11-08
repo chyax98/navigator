@@ -31,6 +31,275 @@ TypeScript 5.9 + Vue 3.4: Follow standard conventions
 
 <!-- MANUAL ADDITIONS START -->
 
+## Session Updates (2025-11-09)
+
+### 存储层架构优化（第二轮）
+
+#### 优化背景
+第一轮修复后，发现存储适配器存在懒加载竞态和类型安全问题。
+
+#### 优化内容
+
+**1. IndexedDB 适配器 - 修复懒加载竞态**
+
+**问题**:
+```typescript
+// ❌ 原实现：构造函数异步导入 + ensureLoaded() 双重逻辑
+constructor() {
+  import('./storage').then(module => {
+    this.storageManager = module.storageManager || module.default
+  })
+}
+async ensureLoaded() {
+  if (!this.storageManager) {
+    const module = await import('./storage')
+    this.storageManager = module.storageManager || module.default
+  }
+}
+```
+
+存在竞态：如果立即调用方法，可能在构造函数的 `import()` 完成前就执行 `ensureLoaded()`，导致重复导入。
+
+**优化**:
+```typescript
+// ✅ 使用 Promise 缓存，确保只导入一次
+class IndexedDBStorageAdapter implements StorageAdapter {
+  private storageManagerPromise: Promise<any>
+
+  constructor() {
+    this.storageManagerPromise = import('./storage').then(
+      module => module.storageManager || module.default
+    )
+  }
+
+  private async getManager(): Promise<any> {
+    return await this.storageManagerPromise
+  }
+
+  async getBookmarks(): Promise<Bookmark[]> {
+    const manager = await this.getManager()
+    return manager.getBookmarks()
+  }
+}
+```
+
+**2. Chrome Extension 代理 - 替换动态 Proxy**
+
+**问题**:
+```typescript
+// ❌ 原实现：每次方法调用都执行 import()
+storageInstance = new Proxy({} as StorageAdapter, {
+  get(_, prop) {
+    return async (...args: any[]) => {
+      const module = await import('./chrome-storage') // 每次都导入
+      const manager = module.chromeStorageManager
+      return (manager as any)[prop](...args)
+    }
+  }
+})
+```
+
+**优化**:
+```typescript
+// ✅ 使用 ChromeStorageProxy 类，Promise 缓存
+class ChromeStorageProxy implements StorageAdapter {
+  private managerPromise: Promise<any>
+
+  constructor() {
+    this.managerPromise = import('./chrome-storage').then(
+      module => module.chromeStorageManager || module.default
+    )
+  }
+
+  private async getManager(): Promise<any> {
+    return await this.managerPromise
+  }
+
+  isInitialized(): boolean {
+    return true // Chrome Storage 同步可用
+  }
+
+  async getBookmarks(): Promise<Bookmark[]> {
+    const manager = await this.getManager()
+    return manager.getBookmarks()
+  }
+}
+```
+
+#### 优化效果
+
+**性能**:
+- ✅ 模块只加载一次（Promise 缓存）
+- ✅ 避免竞态条件
+- ✅ 类型安全（移除 Proxy 的 `any` 类型）
+
+**代码质量**:
+- ✅ 逻辑清晰（统一的 `getManager()` 模式）
+- ✅ 易于维护（类结构替代动态 Proxy）
+- ✅ TypeScript 友好（显式方法定义）
+- ✅ 存储统一（所有数据都用对应环境的正确存储）
+
+**3. HomePage 数据统一到 IndexedDB**
+
+**问题**: Web 应用的 HomePage 数据使用 localStorage,与其他数据（Bookmarks, Categories, Config）不一致
+
+**修复**:
+1. 在 `storage.ts` (IndexedDB) 中添加 HomePage 方法
+2. 更新 `storage-factory.ts` 直接委托给 IndexedDB
+3. 添加自动迁移逻辑（localStorage → IndexedDB）
+
+**迁移逻辑**:
+```typescript
+private async migrateLegacyHomepageData(): Promise<void> {
+  // 1. 检查 localStorage 是否有旧数据
+  const stored = localStorage.getItem('navigator_homepage_layout')
+  if (!stored) return
+
+  // 2. 检查 IndexedDB 是否已有数据
+  const existing = await manager.getHomepageLayout()
+  if (existing) return // 已有数据，不迁移
+
+  // 3. 迁移到 IndexedDB
+  await manager.saveHomepageLayout(parsedData)
+
+  // 4. 清除 localStorage 旧数据
+  localStorage.removeItem('navigator_homepage_layout')
+}
+```
+
+**迁移特点**:
+- ✅ 自动检测（首次读取时触发）
+- ✅ 幂等操作（多次调用只迁移一次）
+- ✅ 向后兼容（旧数据平滑迁移）
+- ✅ 清理旧数据（迁移成功后删除 localStorage）
+
+#### 验证
+```bash
+✅ TypeScript 类型检查通过
+npx vue-tsc --noEmit
+```
+
+---
+
+## Session Updates (2025-11-08)
+
+### 存储层架构修复（第一轮）
+
+#### 问题背景
+项目有两个构建目标，但存储层未正确适配:
+- **Web 应用** (`npm run dev`) - 应使用 IndexedDB
+- **Chrome 插件** (`npm run dev:ext`) - 应使用 `chrome.storage.local` API
+
+之前的实现中，`bookmark.ts` 和 `config.ts` 直接硬编码导入了 IndexedDB 实现，导致插件环境下无法使用正确的存储 API。
+
+#### 修复方案
+
+**架构设计**:
+```
+存储工厂 (storage-factory.ts)
+├── 环境检测: detectEnvironment()
+│   ├── chrome-extension (chrome.storage API)
+│   └── web (IndexedDB)
+│
+└── 统一接口: StorageAdapter
+    ├── chrome-storage.ts (Chrome Extension)
+    └── storage.ts (IndexedDB)
+```
+
+**修改的文件**:
+
+1. **src/stores/bookmark.ts**:
+```typescript
+// 修改前
+import { storageManager } from '@/utils/storage'
+
+// 修改后
+import { getStorage } from '@/utils/storage-factory'
+const storageManager = getStorage()
+```
+
+2. **src/stores/config.ts**:
+```typescript
+// 修改前
+import { storageManager } from '@/utils/storage'
+
+// 修改后
+import { getStorage } from '@/utils/storage-factory'
+const storageManager = getStorage()
+```
+
+**环境检测逻辑** (`src/utils/storage-factory.ts`):
+```typescript
+export function detectEnvironment(): RuntimeEnvironment {
+  // Chrome Extension 环境
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.runtime?.id) {
+    return 'chrome-extension'
+  }
+
+  // 默认 Web 环境 (IndexedDB)
+  return 'web'
+}
+```
+
+**存储适配器接口**:
+```typescript
+interface StorageAdapter {
+  // 书签操作
+  getBookmarks(): Promise<Bookmark[]>
+  saveBookmark(bookmark: Bookmark): Promise<void>
+  deleteBookmark(id: string): Promise<void>
+
+  // 分类操作
+  getCategories(): Promise<Category[]>
+  saveCategories(categories: Category[]): Promise<void>
+
+  // 配置操作
+  getConfig(): Promise<AppConfig | null>
+  saveConfig(config: AppConfig): Promise<void>
+
+  // 主页布局
+  getHomepageItems(): Promise<HomepageItem[]>
+  saveHomepageItems(items: HomepageItem[]): Promise<void>
+  getHomepageLayout(): Promise<HomepageLayout | null>
+  saveHomepageLayout(layout: HomepageLayout): Promise<void>
+
+  // 数据管理
+  exportData(): Promise<string>
+  importData(jsonData: string): Promise<void>
+  clearAll(): Promise<void>
+
+  isInitialized(): boolean
+}
+```
+
+#### 技术细节
+
+**Chrome Storage 实现**:
+- 使用 `chrome.storage.local` API
+- 5MB 存储限制
+- 自动序列化/反序列化
+- 支持跨扩展页面同步
+
+**IndexedDB 实现**:
+- 无存储限制
+- 支持索引查询
+- 事务性操作
+- 更适合大量数据
+
+**优势**:
+✅ 代码零修改切换存储后端
+✅ 统一的 API 接口
+✅ 自动环境检测
+✅ TypeScript 类型安全
+
+#### 验证
+```bash
+# 类型检查通过
+npx vue-tsc --noEmit
+```
+
+---
+
 ## Session Updates (2025-11-03)
 
 ### UI/UX 优化

@@ -14,10 +14,12 @@ import type {
   HomepageItem,
   HomepageItemWithBookmark
 } from '@/types/homepage'
-import { DEFAULT_CONFIG, STORAGE_KEY, COLUMN_CONSTRAINTS } from '@/types/homepage'
+import { DEFAULT_CONFIG, COLUMN_CONSTRAINTS } from '@/types/homepage'
+import { getStorage } from '@/utils/storage-factory'
 
 export const useHomepageStore = defineStore('homepage', () => {
   const bookmarkStore = useBookmarkStore()
+  const storage = getStorage()
 
   // ===== State =====
 
@@ -81,23 +83,21 @@ export const useHomepageStore = defineStore('homepage', () => {
   // ===== Actions =====
 
   /**
-   * 从 localStorage 读取主页布局
+   * 从统一存储层读取主页布局
    *
    * @throws {Error} 读取失败时使用默认配置
    */
   async function loadLayout(): Promise<void> {
     try {
       loading.value = true
-      const stored = localStorage.getItem(STORAGE_KEY)
+      const data = await storage.getHomepageLayout()
 
-      if (!stored) {
+      if (!data) {
         // 使用默认配置
         config.value = { ...DEFAULT_CONFIG }
         items.value = []
         return
       }
-
-      const data: HomepageLayout = JSON.parse(stored)
 
       // T039: 数据版本兼容性检查
       if (!data.config || !data.items) {
@@ -113,16 +113,9 @@ export const useHomepageStore = defineStore('homepage', () => {
         return
       }
 
-      // 恢复 Date 对象
-      config.value = {
-        ...data.config,
-        lastModified: new Date(data.config.lastModified)
-      }
-
-      items.value = data.items.map((item) => ({
-        ...item,
-        addedAt: new Date(item.addedAt)
-      }))
+      // 恢复数据（storage 已经处理了 Date 反序列化）
+      config.value = data.config
+      items.value = data.items
 
       // 修复布局
       await repairLayout()
@@ -137,7 +130,7 @@ export const useHomepageStore = defineStore('homepage', () => {
   }
 
   /**
-   * 保存主页布局到 localStorage
+   * 保存主页布局到统一存储层
    *
    * @throws {Error} 保存失败时抛出错误
    */
@@ -157,7 +150,7 @@ export const useHomepageStore = defineStore('homepage', () => {
         items: items.value
       }
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(layout))
+      await storage.saveHomepageLayout(layout)
     } catch (error) {
       console.error('Failed to persist homepage layout:', error)
       throw error

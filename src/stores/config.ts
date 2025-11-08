@@ -6,9 +6,12 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { AppConfig, SessionData } from '@/types/config'
 import { defaultConfig } from '@/types/config'
-import { storageManager } from '@/utils/storage'
+import { getStorage } from '@/utils/storage-factory'
 import { embeddingService } from '@/utils/embedding'
 import { aiServiceManager } from '@/services/ai/ai-service-manager'
+
+// 使用工厂函数获取环境适配的存储实现
+const storageManager = getStorage()
 
 export const useConfigStore = defineStore('config', () => {
   // State

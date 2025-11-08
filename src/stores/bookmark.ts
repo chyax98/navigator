@@ -5,8 +5,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed, toRaw, isProxy } from 'vue'
 import type { Bookmark, Category, SearchResult, BookmarkSource, CategorySource } from '@/types/bookmark'
-import { storageManager } from '@/utils/storage'
+import { getStorage } from '@/utils/storage-factory'
 import { searchManager } from '@/utils/search'
+
+// 使用工厂函数获取环境适配的存储实现
+const storageManager = getStorage()
 import { normalizeUrl } from '@/utils/url'
 import { sortBookmarks } from '@/utils/sort'
 import { nanoid } from 'nanoid'
@@ -782,59 +785,60 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       const categoriesForStorage = userCategories.map(cat => prepareCategoryForStorage(cat))
       await storageManager.saveCategories(categoriesForStorage)
 
-      // 2. 同步书签
-      // 创建 Chrome 书签的 ID 映射
+
+      // 2. 同步书签（增量更新：只更新 Chrome 管理的字段，保留用户自定义字段）
       const chromeBookmarkMap = new Map(chromeBookmarks.map(b => [b.id, b]))
       const existingChromeBookmarks = bookmarks.value.filter(b => b.source === 'chrome')
 
       // 删除 Chrome 中已不存在的书签
       for (const existing of existingChromeBookmarks) {
         if (!chromeBookmarkMap.has(existing.id)) {
-          try {
-            await deleteBookmark(existing.id)
-            deleted++
-          } catch (error) {
-            console.error(`Failed to delete Chrome bookmark ${existing.id}:`, error)
-            // 删除失败时取消置顶状态，避免残留"幽灵书签"
-            if (existing.isPinned) {
-              try {
-                await updateBookmark(existing.id, { isPinned: false, pinnedAt: undefined })
-              } catch (updateError) {
-                console.error(`Failed to unpin bookmark ${existing.id}:`, updateError)
-              }
-            }
-          }
+          await deleteBookmark(existing.id)
+          deleted++
         }
       }
 
-      // 添加或更新书签
+      // 更新或添加书签
       for (const chromeBookmark of chromeBookmarks) {
         const existingIndex = bookmarks.value.findIndex(b => b.id === chromeBookmark.id)
 
         if (existingIndex === -1) {
-          // 新增书签
+          // 新书签（Chrome 新增）
           const preparedBookmark = prepareBookmarkForStorage(chromeBookmark)
           bookmarks.value.push(preparedBookmark)
           await storageManager.saveBookmark(preparedBookmark)
           await searchManager.addBookmark(preparedBookmark)
           added++
         } else {
-          // 检查是否需要更新
+          // 已存在的书签：只更新 Chrome 管理的字段，保留用户自定义字段
           const existing = bookmarks.value[existingIndex]
+
+          // 检查 Chrome 侧数据是否变化
           const needsUpdate = (
             existing.title !== chromeBookmark.title ||
             existing.url !== chromeBookmark.url ||
-            existing.categoryId !== chromeBookmark.categoryId
+            existing.categoryId !== chromeBookmark.categoryId ||
+            existing.sort !== chromeBookmark.sort
           )
 
           if (needsUpdate) {
+            // ✅ 核心逻辑：只更新 Chrome 同步的字段，保留用户自定义字段
             const updatedBookmark = {
               ...existing,
+              // Chrome 管理的字段（从 Chrome API 同步）
               title: chromeBookmark.title,
               url: chromeBookmark.url,
               categoryId: chromeBookmark.categoryId,
               sort: chromeBookmark.sort,
-              updatedAt: new Date()
+              updatedAt: new Date(),
+              // 用户自定义字段（保持不变）
+              isPinned: existing.isPinned,      // ✅ 保留置顶状态
+              pinnedAt: existing.pinnedAt,
+              tags: existing.tags,
+              description: existing.description,
+              favicon: existing.favicon,
+              clickCount: existing.clickCount,
+              lastVisited: existing.lastVisited
             }
             const preparedBookmark = prepareBookmarkForStorage(updatedBookmark)
             bookmarks.value[existingIndex] = preparedBookmark
@@ -842,6 +846,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
             await searchManager.updateBookmark(preparedBookmark)
             updated++
           }
+          // 如果 Chrome 数据没变化，什么都不做（保持现有状态，包括 isPinned）
         }
       }
 

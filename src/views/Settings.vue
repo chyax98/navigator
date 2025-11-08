@@ -492,13 +492,13 @@ function scheduleSearchRebuild(delay = 500) {
   }, delay)
 }
 
-function handleThemeChange(value: string) {
-  configStore.setTheme(value as any)
+async function handleThemeChange(value: string) {
+  await configStore.setTheme(value as any)
 }
 
 
-function handleConfigUpdate() {
-  configStore.updateConfig(configStore.config)
+async function handleConfigUpdate() {
+  await configStore.updateConfig(configStore.config)
   message.success('设置已保存')
 }
 
@@ -533,7 +533,7 @@ function handleClearData() {
         await storageManager.clearAll()
         bookmarkStore.bookmarks = []
         bookmarkStore.categories = []
-        configStore.resetConfig()
+        await configStore.resetConfig()
         message.success('数据已清空')
       } catch (error) {
         message.error('清空失败')
@@ -587,15 +587,18 @@ async function handleApiKeyChange(apiKey: string) {
 
 async function handleCustomBaseUrlChange(baseUrl: string) {
   await configStore.updateSemanticSearchConfig({ customApiBaseUrl: baseUrl })
+  message.success('API Base URL 已保存')
 }
 
 async function handleEmbeddingModelChange(model: string) {
   await configStore.updateSemanticSearchConfig({ embeddingModel: model })
   scheduleSearchRebuild(800)
+  message.success('Embedding 模型已保存')
 }
 
 async function handleChatModelChange(model: string) {
   await configStore.updateSemanticSearchConfig({ chatModel: model })
+  message.success('聊天模型已保存')
 }
 
 async function testApiConnection() {
@@ -650,7 +653,7 @@ async function testApiConnection() {
 }
 
 async function handleLinkPreviewApiKeyChange(apiKey: string) {
-  await configStore.updateConfig({ linkPreviewApiKey: apiKey })
+  configStore.updateConfig({ linkPreviewApiKey: apiKey })
   message.success('LinkPreview API Key 已保存')
 }
 

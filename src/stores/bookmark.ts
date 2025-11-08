@@ -140,7 +140,8 @@ function sanitizeBookmarkInput(input: AnyBookmark, fallbackCategoryId: string): 
     bookmark.lastVisited = normalizeDateValue(source.lastVisited)
   }
 
-  if (source.pinnedAt) {
+  // 只有在书签被置顶时才保留 pinnedAt，否则忽略（确保数据一致性）
+  if (bookmark.isPinned && source.pinnedAt) {
     bookmark.pinnedAt = normalizeDateValue(source.pinnedAt)
   }
 
@@ -196,9 +197,11 @@ function prepareBookmarkForStorage(bookmark: Bookmark): Bookmark {
     prepared.lastVisited = normalizeDateValue(raw.lastVisited)
   }
 
-  if (raw.pinnedAt || prepared.isPinned) {
+  // 只有在书签被置顶时才设置 pinnedAt，否则确保不保存该字段
+  if (prepared.isPinned) {
     prepared.pinnedAt = normalizeDateValue(raw.pinnedAt ?? new Date())
   }
+  // 注意：如果 isPinned 为 false，则不设置 pinnedAt 字段（保持 undefined）
 
   return prepared
 }
@@ -249,15 +252,40 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       filtered = bookmarks.value.filter(b => b.categoryId === selectedCategoryId.value)
     }
 
-    // URL 去重：同一个 URL 只保留一个书签（优先保留用户创建的）
+    // URL 去重：同一个 URL 只保留一个书签
+    // 优先级：user > chrome, isPinned > !isPinned, 较新的 > 较旧的
     const uniqueByUrl = new Map<string, Bookmark>()
     filtered.forEach(bookmark => {
       const normalizedUrl = normalizeUrl(bookmark.url)
       const existing = uniqueByUrl.get(normalizedUrl)
 
-      // 如果没有现存书签，或现存的是 Chrome 书签而当前是用户书签，则替换
-      if (!existing || (existing.source === 'chrome' && bookmark.source === 'user')) {
+      if (!existing) {
+        // 没有现存书签，直接添加
         uniqueByUrl.set(normalizedUrl, bookmark)
+      } else {
+        // 决定是否替换现存书签
+        let shouldReplace = false
+
+        // 优先级 1: user 书签优先于 chrome 书签
+        if (existing.source === 'chrome' && bookmark.source === 'user') {
+          shouldReplace = true
+        }
+        // 优先级 2: 同 source 时，置顶书签优先
+        else if (existing.source === bookmark.source && !existing.isPinned && bookmark.isPinned) {
+          shouldReplace = true
+        }
+        // 优先级 3: 同 source、同置顶状态时，保留较新的
+        else if (
+          existing.source === bookmark.source &&
+          existing.isPinned === bookmark.isPinned &&
+          new Date(bookmark.createdAt).getTime() > new Date(existing.createdAt).getTime()
+        ) {
+          shouldReplace = true
+        }
+
+        if (shouldReplace) {
+          uniqueByUrl.set(normalizedUrl, bookmark)
+        }
       }
     })
 
@@ -457,9 +485,9 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     })
   }
 
-  function saveCategoriesSnapshot() {
+  async function saveCategoriesSnapshot(): Promise<void> {
     const categoriesForStorage = categories.value.map(category => prepareCategoryForStorage(category))
-    void storageManager.saveCategories(categoriesForStorage)
+    await storageManager.saveCategories(categoriesForStorage)
   }
 
   async function moveBookmarksInternal(options: MoveBookmarksOptions) {
@@ -602,7 +630,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       reindexCategorySorts(normalizedCurrentParent)
     }
 
-    saveCategoriesSnapshot()
+    await saveCategoriesSnapshot()
     return true
   }
 
@@ -762,8 +790,20 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       // 删除 Chrome 中已不存在的书签
       for (const existing of existingChromeBookmarks) {
         if (!chromeBookmarkMap.has(existing.id)) {
-          await deleteBookmark(existing.id)
-          deleted++
+          try {
+            await deleteBookmark(existing.id)
+            deleted++
+          } catch (error) {
+            console.error(`Failed to delete Chrome bookmark ${existing.id}:`, error)
+            // 删除失败时取消置顶状态，避免残留"幽灵书签"
+            if (existing.isPinned) {
+              try {
+                await updateBookmark(existing.id, { isPinned: false, pinnedAt: undefined })
+              } catch (updateError) {
+                console.error(`Failed to unpin bookmark ${existing.id}:`, updateError)
+              }
+            }
+          }
         }
       }
 
@@ -891,7 +931,8 @@ export const useBookmarkStore = defineStore('bookmark', () => {
           normalized.lastVisited = new Date(bookmark.lastVisited)
         }
 
-        if (bookmark.pinnedAt && !(bookmark.pinnedAt instanceof Date)) {
+        // 只有在书签被置顶时才保留 pinnedAt，确保数据一致性
+        if (normalized.isPinned && bookmark.pinnedAt && !(bookmark.pinnedAt instanceof Date)) {
           normalized.pinnedAt = new Date(bookmark.pinnedAt)
         }
 
@@ -977,8 +1018,22 @@ export const useBookmarkStore = defineStore('bookmark', () => {
   async function toggleBookmarkPin(id: string) {
     const target = bookmarks.value.find(b => b.id === id)
     if (!target) return
+
     const next = !target.isPinned
+    const categoryName = categories.value.find(c => c.id === target.categoryId)?.name
+
     await updateBookmark(id, { isPinned: next, pinnedAt: next ? new Date() : undefined })
+
+    // 用户反馈提示
+    if (typeof window !== 'undefined' && (window as any).$message) {
+      if (next) {
+        ;(window as any).$message.success('已添加到主页')
+      } else if (categoryName) {
+        ;(window as any).$message.info(`已从主页移除，书签仍在「${categoryName}」分类中`)
+      } else {
+        ;(window as any).$message.info('已从主页移除')
+      }
+    }
   }
 
   async function deleteBookmark(id: string) {
@@ -998,7 +1053,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     }
 
     categories.value.push(newCategory)
-    void storageManager.saveCategories(categories.value)
+    await storageManager.saveCategories(categories.value)
 
     return newCategory
   }
@@ -1012,7 +1067,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       ...updates
     }
 
-    void storageManager.saveCategories(categories.value)
+    await storageManager.saveCategories(categories.value)
   }
 
   async function toggleCategoryPin(id: string) {
@@ -1023,7 +1078,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       ...categories.value[index],
       isPinned: !current
     }
-    void storageManager.saveCategories(categories.value)
+    await storageManager.saveCategories(categories.value)
   }
 
   async function deleteCategory(id: string) {
@@ -1047,7 +1102,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       collapsedCategories.value = next
     }
     reindexCategorySorts(parentId)
-    saveCategoriesSnapshot()
+    await saveCategoriesSnapshot()
   }
 
   async function search(query: string) {
@@ -1115,6 +1170,9 @@ export const useBookmarkStore = defineStore('bookmark', () => {
         updatedAt: new Date(bookmark.updatedAt),
         clickCount: typeof bookmark.clickCount === 'number' ? bookmark.clickCount : 0,
         isPrivate: Boolean(bookmark.isPrivate),
+        // 导入时默认清除置顶状态（置顶是个人化偏好，不应随配置传递）
+        isPinned: false,
+        pinnedAt: undefined,
         sort: typeof bookmark.sort === 'number' && Number.isFinite(bookmark.sort)
           ? bookmark.sort
           : baseSort + index
@@ -1324,6 +1382,58 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     }))
   }
 
+  async function batchPin() {
+    const ids = Array.from(selectedBookmarkIds.value)
+    let pinnedCount = 0
+
+    await Promise.all(ids.map(async id => {
+      const bookmark = bookmarks.value.find(b => b.id === id)
+      if (bookmark && !bookmark.isPinned) {
+        bookmark.isPinned = true
+        bookmark.pinnedAt = new Date()
+        bookmark.updatedAt = new Date()
+
+        const prepared = prepareBookmarkForStorage(bookmark)
+        await storageManager.saveBookmark(prepared)
+        await searchManager.updateBookmark(prepared)
+        pinnedCount++
+      }
+    }))
+
+    clearBookmarkSelection()
+
+    // 用户反馈
+    if (typeof window !== 'undefined' && (window as any).$message && pinnedCount > 0) {
+      ;(window as any).$message.success(`已将 ${pinnedCount} 个书签添加到主页`)
+    }
+  }
+
+  async function batchUnpin() {
+    const ids = Array.from(selectedBookmarkIds.value)
+    let unpinnedCount = 0
+
+    await Promise.all(ids.map(async id => {
+      const bookmark = bookmarks.value.find(b => b.id === id)
+      if (bookmark && bookmark.isPinned) {
+        bookmark.isPinned = false
+        bookmark.pinnedAt = undefined
+        bookmark.updatedAt = new Date()
+
+        const prepared = prepareBookmarkForStorage(bookmark)
+        await storageManager.saveBookmark(prepared)
+        await searchManager.updateBookmark(prepared)
+        unpinnedCount++
+      }
+    }))
+
+    clearBookmarkSelection()
+
+    // 用户反馈
+    if (typeof window !== 'undefined' && (window as any).$message && unpinnedCount > 0) {
+      ;(window as any).$message.info(`已将 ${unpinnedCount} 个书签从主页移除`)
+    }
+  }
+
   async function batchDelete() {
     const ids = Array.from(selectedBookmarkIds.value)
 
@@ -1469,6 +1579,8 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     selectAll,
     batchMove,
     batchAddTags,
+    batchPin,
+    batchUnpin,
     batchDelete,
 
     ...selectionExports

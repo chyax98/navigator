@@ -361,7 +361,7 @@ function handleToggle() {
   emit('toggle', props.category.id)
 }
 
-function handleAction(key: string) {
+async function handleAction(key: string) {
   switch (key) {
     case 'add-child':
       // 触发添加子分类事件
@@ -375,7 +375,7 @@ function handleAction(key: string) {
     case 'toggle-pin':
       {
         const wasPinned = Boolean(props.category.isPinned)
-        bookmarkStore.toggleCategoryPin(props.category.id)
+        await bookmarkStore.toggleCategoryPin(props.category.id)
         message.success(wasPinned ? '已取消置顶' : '已置顶到主页')
       }
       break

@@ -30,25 +30,25 @@ export const useConfigStore = defineStore('config', () => {
     await syncAiClients()
   }
 
-  function updateConfig(updates: Partial<AppConfig>) {
+  async function updateConfig(updates: Partial<AppConfig>): Promise<void> {
     config.value = { ...config.value, ...updates }
-    void storageManager.saveConfig(config.value)
+    await storageManager.saveConfig(config.value)
   }
 
-  function setTheme(theme: 'light' | 'dark' | 'auto') {
+  async function setTheme(theme: 'light' | 'dark' | 'auto'): Promise<void> {
     config.value.theme = theme
-    void storageManager.saveConfig(config.value)
+    await storageManager.saveConfig(config.value)
     applyTheme(theme)
   }
 
-  function setLanguage(language: string) {
+  async function setLanguage(language: string): Promise<void> {
     config.value.language = language
-    void storageManager.saveConfig(config.value)
+    await storageManager.saveConfig(config.value)
   }
 
-  function togglePasswordProtection(enabled: boolean) {
+  async function togglePasswordProtection(enabled: boolean): Promise<void> {
     config.value.passwordEnabled = enabled
-    void storageManager.saveConfig(config.value)
+    await storageManager.saveConfig(config.value)
   }
 
   function authenticate(success: boolean) {
@@ -67,10 +67,10 @@ export const useConfigStore = defineStore('config', () => {
     return session.value.authenticated
   }
 
-  function resetConfig() {
+  async function resetConfig(): Promise<void> {
     config.value = { ...defaultConfig }
-    void storageManager.saveConfig(config.value)
-    void syncAiClients()
+    await storageManager.saveConfig(config.value)
+    await syncAiClients()
   }
 
   // AI API配置方法
@@ -89,7 +89,7 @@ export const useConfigStore = defineStore('config', () => {
       ...config.value,
       ...updates
     }
-    void storageManager.saveConfig(config.value)
+    await storageManager.saveConfig(config.value)
     await syncAiClients()
   }
 

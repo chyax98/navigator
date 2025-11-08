@@ -6,12 +6,12 @@
 import type { StorageAdapter } from './chrome-storage'
 import type { Bookmark, Category } from '@/types/bookmark'
 import type { AppConfig } from '@/types/config'
-import type { HomepageItem } from '@/types/homepage'
+import type { HomepageItem, HomepageLayout } from '@/types/homepage'
 
 /**
  * 运行环境类型
  */
-export type RuntimeEnvironment = 'chrome-extension' | 'tauri' | 'web'
+export type RuntimeEnvironment = 'chrome-extension' | 'web'
 
 /**
  * 检测当前运行环境
@@ -22,131 +22,251 @@ export function detectEnvironment(): RuntimeEnvironment {
     return 'chrome-extension'
   }
 
-  // 检查是否在 Tauri 环境
-  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
-    return 'tauri'
-  }
-
   // 默认为 Web 环境（使用 IndexedDB）
   return 'web'
+}
+
+/**
+ * Chrome Extension 存储代理（懒加载 chrome-storage 模块）
+ */
+class ChromeStorageProxy implements StorageAdapter {
+  private managerPromise: Promise<any>
+
+  constructor() {
+    // 使用 Promise 缓存，确保模块只加载一次
+    this.managerPromise = import('./chrome-storage').then(
+      module => module.chromeStorageManager || module.default
+    )
+  }
+
+  private async getManager(): Promise<any> {
+    return await this.managerPromise
+  }
+
+  isInitialized(): boolean {
+    // Chrome Storage API 同步可用，无需异步初始化
+    return true
+  }
+
+  async getBookmarks(): Promise<Bookmark[]> {
+    const manager = await this.getManager()
+    return manager.getBookmarks()
+  }
+
+  async saveBookmark(bookmark: Bookmark): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveBookmark(bookmark)
+  }
+
+  async deleteBookmark(id: string): Promise<void> {
+    const manager = await this.getManager()
+    return manager.deleteBookmark(id)
+  }
+
+  async getBookmarksByCategory(categoryId: string): Promise<Bookmark[]> {
+    const manager = await this.getManager()
+    return manager.getBookmarksByCategory(categoryId)
+  }
+
+  async getCategories(): Promise<Category[]> {
+    const manager = await this.getManager()
+    return manager.getCategories()
+  }
+
+  async saveCategories(categories: Category[]): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveCategories(categories)
+  }
+
+  async getConfig(): Promise<AppConfig | null> {
+    const manager = await this.getManager()
+    return manager.getConfig()
+  }
+
+  async saveConfig(config: AppConfig): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveConfig(config)
+  }
+
+  async getHomepageItems(): Promise<HomepageItem[]> {
+    const manager = await this.getManager()
+    return manager.getHomepageItems()
+  }
+
+  async saveHomepageItems(items: HomepageItem[]): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveHomepageItems(items)
+  }
+
+  async getHomepageLayout(): Promise<HomepageLayout | null> {
+    const manager = await this.getManager()
+    return manager.getHomepageLayout()
+  }
+
+  async saveHomepageLayout(layout: HomepageLayout): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveHomepageLayout(layout)
+  }
+
+  async exportData(): Promise<string> {
+    const manager = await this.getManager()
+    return manager.exportData()
+  }
+
+  async importData(jsonData: string): Promise<void> {
+    const manager = await this.getManager()
+    return manager.importData(jsonData)
+  }
+
+  async clearAll(): Promise<void> {
+    const manager = await this.getManager()
+    return manager.clearAll()
+  }
 }
 
 /**
  * IndexedDB 存储适配器（包装现有的 StorageManager）
  */
 class IndexedDBStorageAdapter implements StorageAdapter {
-  private storageManager: any
+  private storageManagerPromise: Promise<any>
 
   constructor() {
-    // 动态导入现有的 storage.ts
-    import('./storage').then(module => {
-      this.storageManager = module.storageManager || module.default
-    })
+    // 使用 Promise 缓存，确保模块只加载一次，避免竞态
+    this.storageManagerPromise = import('./storage').then(
+      module => module.storageManager || module.default
+    )
   }
 
-  async ensureLoaded(): Promise<void> {
-    if (!this.storageManager) {
-      const module = await import('./storage')
-      this.storageManager = module.storageManager || module.default
-    }
+  private async getManager(): Promise<any> {
+    return await this.storageManagerPromise
   }
 
   isInitialized(): boolean {
-    return this.storageManager?.isInitialized() || false
+    // IndexedDB 需要异步初始化，这里返回 false 更安全
+    // 实际初始化状态由 storageManager 自己管理
+    return false
   }
 
   async getBookmarks(): Promise<Bookmark[]> {
-    await this.ensureLoaded()
-    return this.storageManager.getBookmarks()
+    const manager = await this.getManager()
+    return manager.getBookmarks()
   }
 
   async saveBookmark(bookmark: Bookmark): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.saveBookmark(bookmark)
+    const manager = await this.getManager()
+    return manager.saveBookmark(bookmark)
   }
 
   async deleteBookmark(id: string): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.deleteBookmark(id)
+    const manager = await this.getManager()
+    return manager.deleteBookmark(id)
   }
 
   async getBookmarksByCategory(categoryId: string): Promise<Bookmark[]> {
-    await this.ensureLoaded()
-    return this.storageManager.getBookmarksByCategory(categoryId)
+    const manager = await this.getManager()
+    return manager.getBookmarksByCategory(categoryId)
   }
 
   async getCategories(): Promise<Category[]> {
-    await this.ensureLoaded()
-    return this.storageManager.getCategories()
+    const manager = await this.getManager()
+    return manager.getCategories()
   }
 
   async saveCategories(categories: Category[]): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.saveCategories(categories)
+    const manager = await this.getManager()
+    return manager.saveCategories(categories)
   }
 
   async getConfig(): Promise<AppConfig | null> {
-    await this.ensureLoaded()
-    return this.storageManager.getConfig()
+    const manager = await this.getManager()
+    return manager.getConfig()
   }
 
   async saveConfig(config: AppConfig): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.saveConfig(config)
+    const manager = await this.getManager()
+    return manager.saveConfig(config)
   }
 
   async getHomepageItems(): Promise<HomepageItem[]> {
-    await this.ensureLoaded()
-    // IndexedDB 版本目前使用 localStorage，这里从 localStorage 读取
-    const stored = localStorage.getItem('navigator_homepage_layout')
-    if (stored) {
-      try {
-        const layout = JSON.parse(stored)
-        return layout.items || []
-      } catch {
-        return []
-      }
-    }
-    return []
+    const manager = await this.getManager()
+    // 尝试从 localStorage 迁移旧数据
+    await this.migrateLegacyHomepageData()
+    return manager.getHomepageItems()
   }
 
   async saveHomepageItems(items: HomepageItem[]): Promise<void> {
-    await this.ensureLoaded()
-    // IndexedDB 版本目前使用 localStorage，这里写入 localStorage
-    const stored = localStorage.getItem('navigator_homepage_layout')
-    let layout: any = {}
+    const manager = await this.getManager()
+    return manager.saveHomepageItems(items)
+  }
 
-    if (stored) {
-      try {
-        layout = JSON.parse(stored)
-      } catch {
-        // 忽略解析错误
+  async getHomepageLayout(): Promise<HomepageLayout | null> {
+    const manager = await this.getManager()
+    // 尝试从 localStorage 迁移旧数据
+    await this.migrateLegacyHomepageData()
+    return manager.getHomepageLayout()
+  }
+
+  async saveHomepageLayout(layout: HomepageLayout): Promise<void> {
+    const manager = await this.getManager()
+    return manager.saveHomepageLayout(layout)
+  }
+
+  /**
+   * 迁移 localStorage 中的旧数据到 IndexedDB（仅执行一次）
+   */
+  private migrated = false
+  private async migrateLegacyHomepageData(): Promise<void> {
+    if (this.migrated) return
+    this.migrated = true
+
+    try {
+      const stored = localStorage.getItem('navigator_homepage_layout')
+      if (!stored) return
+
+      const manager = await this.getManager()
+
+      // 检查 IndexedDB 中是否已有数据
+      const existing = await manager.getHomepageLayout()
+      if (existing) return // 已有数据，不迁移
+
+      // 解析 localStorage 数据
+      const data = JSON.parse(stored)
+
+      // 迁移到 IndexedDB
+      const layout: HomepageLayout = {
+        config: {
+          ...data.config,
+          lastModified: new Date(data.config?.lastModified || Date.now())
+        },
+        items: (data.items || []).map((item: any) => ({
+          ...item,
+          addedAt: new Date(item.addedAt || Date.now())
+        }))
       }
-    }
 
-    layout.items = items
-    layout.config = layout.config || {
-      version: 1,
-      columns: 3,
-      lastModified: new Date().toISOString()
-    }
+      await manager.saveHomepageLayout(layout)
 
-    localStorage.setItem('navigator_homepage_layout', JSON.stringify(layout))
+      // 迁移成功后清除 localStorage 旧数据
+      localStorage.removeItem('navigator_homepage_layout')
+      console.log('[Storage Migration] HomePage data migrated from localStorage to IndexedDB')
+    } catch (error) {
+      console.error('[Storage Migration] Failed to migrate homepage data:', error)
+    }
   }
 
   async exportData(): Promise<string> {
-    await this.ensureLoaded()
-    return this.storageManager.exportData()
+    const manager = await this.getManager()
+    return manager.exportData()
   }
 
   async importData(jsonData: string): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.importData(jsonData)
+    const manager = await this.getManager()
+    return manager.importData(jsonData)
   }
 
   async clearAll(): Promise<void> {
-    await this.ensureLoaded()
-    return this.storageManager.clearAll()
+    const manager = await this.getManager()
+    return manager.clearAll()
   }
 }
 
@@ -164,28 +284,11 @@ export function getStorage(): StorageAdapter {
 
   switch (env) {
     case 'chrome-extension': {
-      // 动态导入 Chrome Storage，先返回懒加载代理
-      storageInstance = new Proxy({} as StorageAdapter, {
-        get(_, prop) {
-          if (prop === 'isInitialized') {
-            // isInitialized 是同步方法，返回函数
-            return () => {
-              // Chrome Storage 总是就绪的
-              return true
-            }
-          }
-          // 其他方法返回异步函数
-          return async (...args: any[]) => {
-            const module = await import('./chrome-storage')
-            const manager = module.chromeStorageManager || module.default
-            return (manager as any)[prop](...args)
-          }
-        }
-      })
+      // 使用 ChromeStorageProxy 代替原始 Proxy，避免每次调用都 import
+      storageInstance = new ChromeStorageProxy() as StorageAdapter
       break
     }
 
-    case 'tauri':
     case 'web':
     default: {
       // 使用 IndexedDB（现有实现）
@@ -214,7 +317,6 @@ export function getEnvironmentInfo() {
   return {
     environment: env,
     isExtension: env === 'chrome-extension',
-    isTauri: env === 'tauri',
     isWeb: env === 'web',
     supportsBrowserBookmarks: typeof chrome !== 'undefined' && !!chrome.bookmarks
   }

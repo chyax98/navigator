@@ -6,14 +6,15 @@
 
 import type { Bookmark, Category } from '@/types/bookmark'
 import type { AppConfig } from '@/types/config'
-import type { HomepageItem } from '@/types/homepage'
+import type { HomepageItem, HomepageLayout } from '@/types/homepage'
 
 // 存储键名常量
 const STORAGE_KEYS = {
   BOOKMARKS: 'navigator_bookmarks',
   CATEGORIES: 'navigator_categories',
   CONFIG: 'navigator_config',
-  HOMEPAGE_ITEMS: 'navigator_homepage_items'
+  HOMEPAGE_ITEMS: 'navigator_homepage_items',
+  HOMEPAGE_LAYOUT: 'navigator_homepage_layout'
 } as const
 
 /**
@@ -37,6 +38,8 @@ export interface StorageAdapter {
   // 主页布局操作
   getHomepageItems(): Promise<HomepageItem[]>
   saveHomepageItems(items: HomepageItem[]): Promise<void>
+  getHomepageLayout(): Promise<HomepageLayout | null>
+  saveHomepageLayout(layout: HomepageLayout): Promise<void>
 
   // 数据管理
   exportData(): Promise<string>
@@ -205,6 +208,45 @@ class ChromeStorageManager implements StorageAdapter {
   async saveHomepageItems(items: HomepageItem[]): Promise<void> {
     await this.ensureInitialized()
     await this.set(STORAGE_KEYS.HOMEPAGE_ITEMS, items)
+  }
+
+  async getHomepageLayout(): Promise<HomepageLayout | null> {
+    await this.ensureInitialized()
+    const data = await this.get<any>(STORAGE_KEYS.HOMEPAGE_LAYOUT)
+
+    if (!data) {
+      return null
+    }
+
+    // 反序列化 Date 对象
+    return {
+      config: {
+        ...data.config,
+        lastModified: new Date(data.config.lastModified)
+      },
+      items: (data.items || []).map((item: any) => ({
+        ...item,
+        addedAt: new Date(item.addedAt)
+      }))
+    }
+  }
+
+  async saveHomepageLayout(layout: HomepageLayout): Promise<void> {
+    await this.ensureInitialized()
+
+    // 序列化 Date 对象
+    const serializedLayout = {
+      config: {
+        ...layout.config,
+        lastModified: layout.config.lastModified.toISOString()
+      },
+      items: layout.items.map(item => ({
+        ...item,
+        addedAt: item.addedAt.toISOString()
+      }))
+    }
+
+    await this.set(STORAGE_KEYS.HOMEPAGE_LAYOUT, serializedLayout)
   }
 
   // ===== 数据管理 =====

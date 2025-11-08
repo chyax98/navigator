@@ -275,6 +275,94 @@ class StorageManager {
   }
 
   /**
+   * 主页布局管理
+   */
+  async getHomepageLayout(): Promise<any> {
+    await this.ensureInitialized()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['config'], 'readonly')
+      const store = transaction.objectStore('config')
+      const request = store.get('homepage-layout')
+
+      request.onsuccess = () => {
+        const result = request.result
+        if (result) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, ...layout } = result
+
+          // 反序列化 Date 对象
+          if (layout.config && layout.config.lastModified) {
+            layout.config.lastModified = new Date(layout.config.lastModified)
+          }
+          if (Array.isArray(layout.items)) {
+            layout.items = layout.items.map((item: any) => ({
+              ...item,
+              addedAt: item.addedAt ? new Date(item.addedAt) : new Date()
+            }))
+          }
+
+          resolve(layout)
+        } else {
+          resolve(null)
+        }
+      }
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async saveHomepageLayout(layout: any): Promise<void> {
+    await this.ensureInitialized()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction(['config'], 'readwrite')
+      const store = transaction.objectStore('config')
+
+      // 序列化 Date 对象
+      const serializedLayout: any = {
+        id: 'homepage-layout',
+        config: layout.config ? {
+          ...layout.config,
+          lastModified: layout.config.lastModified instanceof Date
+            ? layout.config.lastModified.toISOString()
+            : layout.config.lastModified
+        } : {},
+        items: Array.isArray(layout.items)
+          ? layout.items.map((item: any) => ({
+              ...item,
+              addedAt: item.addedAt instanceof Date
+                ? item.addedAt.toISOString()
+                : item.addedAt
+            }))
+          : []
+      }
+
+      const request = store.put(serializedLayout)
+
+      request.onsuccess = () => resolve()
+      request.onerror = () => reject(request.error)
+    })
+  }
+
+  async getHomepageItems(): Promise<any[]> {
+    const layout = await this.getHomepageLayout()
+    return layout?.items || []
+  }
+
+  async saveHomepageItems(items: any[]): Promise<void> {
+    const layout = await this.getHomepageLayout() || { config: {}, items: [] }
+    layout.items = items
+    if (!layout.config) {
+      layout.config = {
+        version: 1,
+        columns: 3,
+        lastModified: new Date()
+      }
+    }
+    await this.saveHomepageLayout(layout)
+  }
+
+  /**
    * 数据导出
    */
   async exportData(): Promise<string> {

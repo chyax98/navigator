@@ -170,10 +170,10 @@ const isDark = computed(() => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 })
 
-function toggleTheme() {
+async function toggleTheme() {
   const currentTheme = configStore.config.theme
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark'
-  configStore.setTheme(newTheme)
+  await configStore.setTheme(newTheme)
 }
 
 function showAddBookmark() {

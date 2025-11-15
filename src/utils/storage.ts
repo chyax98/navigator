@@ -21,9 +21,6 @@ const DB_SCHEMA = {
 // 自动计算版本号：基于结构的简单哈希
 const DB_VERSION = Object.keys(DB_SCHEMA).length +
   Object.values(DB_SCHEMA).reduce((sum, s) => sum + s.indexes.length, 0)
-// 当前版本: 5 个存储 + 8 个索引 = 13
-
-console.log(`Using database: ${DB_NAME} (version ${DB_VERSION})`)
 
 class StorageManager {
   private db: IDBDatabase | null = null
@@ -70,7 +67,6 @@ class StorageManager {
       request.onsuccess = () => {
         this.db = request.result
         const objectStores = Array.from(this.db.objectStoreNames)
-        console.log('Database opened successfully, object stores:', objectStores)
 
         // 验证必需的对象存储是否存在
         const requiredStores = ['bookmarks', 'categories', 'config', 'searchIndex', 'backups']
@@ -84,7 +80,6 @@ class StorageManager {
           // 删除损坏的数据库
           const deleteRequest = indexedDB.deleteDatabase(DB_NAME)
           deleteRequest.onsuccess = () => {
-            console.log('Old database deleted, reinitializing...')
             // 递归重新初始化
             this.initDatabase().then(resolve).catch(reject)
           }
@@ -97,7 +92,6 @@ class StorageManager {
       }
 
       request.onupgradeneeded = (event) => {
-        console.log('Database upgrade needed, from version', event.oldVersion, 'to', DB_VERSION)
         const db = (event.target as IDBOpenDBRequest).result
         const transaction = (event.target as IDBOpenDBRequest).transaction!
 
@@ -452,9 +446,7 @@ if (import.meta.env.DEV) {
       req.onsuccess = resolve
       req.onerror = resolve
     })
-    console.log('✅ 数据库已删除，正在刷新页面...')
     setTimeout(() => location.reload(), 500)
   }
-  console.log('💡 开发提示: 控制台输入 __clearDB__() 可快速清除数据库')
 }
 export default storageManager

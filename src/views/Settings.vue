@@ -69,7 +69,7 @@
                   v-model:value="configStore.config.aiApiProvider"
                   @update:value="handleApiProviderChange"
                 >
-                  <n-radio value="custom">
+                  <n-radio value="siliconflow">
                     硅基流动（推荐）
                   </n-radio>
                   <n-radio value="openai">
@@ -96,28 +96,32 @@
                 </n-form-item>
               </template>
 
-              <!-- 自定义API配置 -->
+              <!-- 硅基流动API配置 -->
               <template v-else>
                 <n-form-item label="API Base URL">
                   <n-input
-                    v-model:value="configStore.config.customApiBaseUrl"
-                    placeholder="https://api.example.com/v1"
-                    @update:value="handleCustomBaseUrlChange"
+                    v-model:value="configStore.config.siliconflowApiBaseUrl"
+                    placeholder="https://api.siliconflow.cn/v1"
+                    @update:value="handleSiliconflowBaseUrlChange"
                   />
                   <template #help>
-                    OpenAI兼容API的服务地址，如硅基流动等
+                    硅基流动 API 服务地址，留空使用默认值
                   </template>
                 </n-form-item>
 
                 <n-form-item label="API 密钥">
                   <n-input
-                    v-model:value="configStore.config.customApiKey"
+                    v-model:value="configStore.config.siliconflowApiKey"
                     type="password"
-                    placeholder="your-api-key"
+                    placeholder="sk-..."
                     @update:value="handleApiKeyChange"
                   />
                   <template #help>
-                    第三方API服务的访问密钥
+                    硅基流动 API 密钥，<a
+                      href="https://cloud.siliconflow.cn"
+                      target="_blank"
+                      style="color: var(--n-text-color-primary); text-decoration: underline;"
+                    >免费注册</a>获取
                   </template>
                 </n-form-item>
               </template>
@@ -126,22 +130,22 @@
               <n-form-item label="Embedding 模型">
                 <n-input
                   v-model:value="configStore.config.embeddingModel"
-                  placeholder="text-embedding-3-small"
+                  :placeholder="configStore.config.aiApiProvider === 'siliconflow' ? 'BAAI/bge-m3' : 'text-embedding-3-small'"
                   @update:value="handleEmbeddingModelChange"
                 />
                 <template #help>
-                  用于生成向量嵌入的模型名
+                  用于生成向量嵌入的模型。硅基流动推荐：BAAI/bge-m3（多语言）
                 </template>
               </n-form-item>
 
               <n-form-item label="聊天模型">
                 <n-input
                   v-model:value="configStore.config.chatModel"
-                  placeholder="gpt-3.5-turbo"
+                  :placeholder="configStore.config.aiApiProvider === 'siliconflow' ? 'Qwen/Qwen3-8B' : 'gpt-4o-mini'"
                   @update:value="handleChatModelChange"
                 />
                 <template #help>
-                  用于AI标签生成的聊天模型
+                  用于AI标签生成的聊天模型。硅基流动 2025 最新免费模型：Qwen/Qwen3-8B
                 </template>
               </n-form-item>
 
@@ -219,7 +223,7 @@
               <n-input
                 v-model:value="configStore.config.linkPreviewApiKey"
                 type="password"
-                :placeholder="envLinkPreviewApiKey ? '使用环境变量默认值' : 'your-linkpreview-api-key'"
+                placeholder="your-linkpreview-api-key"
                 @update:value="handleLinkPreviewApiKeyChange"
               />
               <template #help>
@@ -227,12 +231,7 @@
                   href="https://my.linkpreview.net"
                   target="_blank"
                   style="color: var(--n-text-color-primary); text-decoration: underline;"
-                >免费注册</a>可获得60次/小时额度。
-                <span
-                  v-if="envLinkPreviewApiKey"
-                  style="color: var(--n-success-color)"
-                >✓ 已配置环境变量默认值</span>
-                <span v-else>留空将使用降级方案</span>
+                >免费注册</a>可获得60次/小时额度，留空将使用降级方案
               </template>
             </n-form-item>
           </n-form>
@@ -445,9 +444,6 @@ const dialog = useDialog()
 
 const activeTab = ref<'general' | 'theme' | 'ai' | 'data' | 'about'>('general')
 
-// 环境变量默认值
-const envLinkPreviewApiKey = import.meta.env.VITE_LINKPREVIEW_API_KEY || ''
-
 // AI 功能相关状态
 const testingConnection = ref(false)
 const semanticSearchStatus = ref({
@@ -555,22 +551,22 @@ async function handleSemanticSearchToggle(enabled: boolean) {
   await bookmarkStore.updateSearchConfig()
 }
 
-async function handleApiProviderChange(provider: 'openai' | 'custom') {
+async function handleApiProviderChange(provider: 'openai' | 'siliconflow') {
   const updates: {
-    aiApiProvider: 'openai' | 'custom'
-    customApiBaseUrl?: string
-    customApiKey?: string
+    aiApiProvider: 'openai' | 'siliconflow'
+    siliconflowApiBaseUrl?: string
+    siliconflowApiKey?: string
     openaiApiKey?: string
   } = { aiApiProvider: provider }
   if (provider === 'openai') {
-    updates.customApiBaseUrl = ''
-    updates.customApiKey = ''
+    updates.siliconflowApiBaseUrl = ''
+    updates.siliconflowApiKey = ''
   } else {
     updates.openaiApiKey = ''
   }
 
   await configStore.updateSemanticSearchConfig(updates)
-  message.success(`已切换到${provider === 'openai' ? 'OpenAI' : '自定义API'}`)
+  message.success(`已切换到${provider === 'openai' ? 'OpenAI' : '硅基流动'}`)
   await bookmarkStore.updateSearchConfig()
 }
 
@@ -579,14 +575,14 @@ async function handleApiKeyChange(apiKey: string) {
   if (provider === 'openai') {
     await configStore.updateSemanticSearchConfig({ openaiApiKey: apiKey })
   } else {
-    await configStore.updateSemanticSearchConfig({ customApiKey: apiKey })
+    await configStore.updateSemanticSearchConfig({ siliconflowApiKey: apiKey })
   }
   scheduleSearchRebuild()
   message.success('API配置已更新')
 }
 
-async function handleCustomBaseUrlChange(baseUrl: string) {
-  await configStore.updateSemanticSearchConfig({ customApiBaseUrl: baseUrl })
+async function handleSiliconflowBaseUrlChange(baseUrl: string) {
+  await configStore.updateSemanticSearchConfig({ siliconflowApiBaseUrl: baseUrl })
   message.success('API Base URL 已保存')
 }
 
@@ -605,7 +601,7 @@ async function testApiConnection() {
   const provider = configStore.config.aiApiProvider || 'openai'
   const hasApiKey = provider === 'openai'
     ? configStore.config.openaiApiKey?.trim()
-    : configStore.config.customApiKey?.trim()
+    : configStore.config.siliconflowApiKey?.trim()
 
   if (!hasApiKey) {
     semanticSearchStatus.value = {

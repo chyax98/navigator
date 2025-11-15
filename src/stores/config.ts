@@ -81,10 +81,10 @@ export const useConfigStore = defineStore('config', () => {
     enableSemanticSearch?: boolean
     semanticWeight?: number
     keywordWeight?: number
-    aiApiProvider?: 'openai' | 'custom'
+    aiApiProvider?: 'openai' | 'siliconflow'
     openaiApiKey?: string
-    customApiBaseUrl?: string
-    customApiKey?: string
+    siliconflowApiBaseUrl?: string
+    siliconflowApiKey?: string
     embeddingModel?: string
     chatModel?: string
   }): Promise<void> {
@@ -104,7 +104,7 @@ export const useConfigStore = defineStore('config', () => {
     const provider = config.value.aiApiProvider || 'openai'
     const apiKey = provider === 'openai'
       ? config.value.openaiApiKey?.trim()
-      : config.value.customApiKey?.trim()
+      : config.value.siliconflowApiKey?.trim()
 
     return {
       enableSemanticSearch: config.value.enableSemanticSearch || false,
@@ -129,14 +129,31 @@ export const useConfigStore = defineStore('config', () => {
   async function syncAiClients(): Promise<void> {
     try {
       const provider = config.value.aiApiProvider || 'openai'
-      const apiKey = (provider === 'openai'
-        ? config.value.openaiApiKey
-        : config.value.customApiKey) || ''
-      const baseURL = provider === 'custom'
-        ? (config.value.customApiBaseUrl?.trim() || undefined)
-        : undefined
-      const embeddingModel = config.value.embeddingModel || 'text-embedding-3-small'
-      const chatModel = config.value.chatModel || 'gpt-3.5-turbo'
+
+      // 获取 API Key：用户配置 > 环境变量 > 空字符串
+      let apiKey = ''
+      if (provider === 'openai') {
+        apiKey = config.value.openaiApiKey?.trim() ||
+                 import.meta.env.VITE_OPENAI_API_KEY?.trim() ||
+                 ''
+      } else {
+        apiKey = config.value.siliconflowApiKey?.trim() ||
+                 import.meta.env.VITE_SILICONFLOW_API_KEY?.trim() ||
+                 import.meta.env.VITE_CUSTOM_API_KEY?.trim() ||
+                 ''
+      }
+
+      // 获取 Base URL：用户配置 > 环境变量 > undefined
+      let baseURL: string | undefined
+      if (provider === 'siliconflow') {
+        baseURL = config.value.siliconflowApiBaseUrl?.trim() ||
+                  import.meta.env.VITE_SILICONFLOW_BASE_URL?.trim() ||
+                  import.meta.env.VITE_CUSTOM_API_BASE_URL?.trim() ||
+                  undefined
+      }
+
+      const embeddingModel = config.value.embeddingModel || 'BAAI/bge-m3'
+      const chatModel = config.value.chatModel || 'Qwen/Qwen3-8B'
 
       aiServiceManager.updateConfig({
         provider,

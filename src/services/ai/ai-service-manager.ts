@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 
-export type AIProvider = 'openai' | 'custom'
+export type AIProvider = 'openai' | 'siliconflow'
 
 export interface AIServiceConfig {
   provider: AIProvider
@@ -11,19 +11,20 @@ export interface AIServiceConfig {
 }
 
 function sanitizeProvider(provider?: AIProvider): AIProvider {
-  return provider === 'custom' ? 'custom' : 'openai'
+  return provider === 'siliconflow' ? 'siliconflow' : 'openai'
 }
 
 function resolveBaseURL(provider: AIProvider, baseURL?: string): string | undefined {
   const trimmed = baseURL?.trim()
-  if (provider === 'custom') {
+  if (provider === 'siliconflow') {
     return trimmed && trimmed.length > 0 ? trimmed : undefined
   }
   return trimmed && trimmed.length > 0 ? trimmed : undefined
 }
 
-const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
-const DEFAULT_CHAT_MODEL = 'gpt-3.5-turbo'
+// 默认使用硅基流动 2025 最新免费模型
+const DEFAULT_EMBEDDING_MODEL = 'BAAI/bge-m3' // 多语言 embedding 模型
+const DEFAULT_CHAT_MODEL = 'Qwen/Qwen3-8B' // 2025 最新免费模型
 
 class AIServiceManager {
   private static instance: AIServiceManager

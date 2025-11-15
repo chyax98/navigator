@@ -248,7 +248,6 @@ class IndexedDBStorageAdapter implements StorageAdapter {
 
       // 迁移成功后清除 localStorage 旧数据
       localStorage.removeItem('navigator_homepage_layout')
-      console.log('[Storage Migration] HomePage data migrated from localStorage to IndexedDB')
     } catch (error) {
       console.error('[Storage Migration] Failed to migrate homepage data:', error)
     }
@@ -297,7 +296,6 @@ export function getStorage(): StorageAdapter {
     }
   }
 
-  console.log(`[Storage Factory] Using ${env} storage backend`)
   return storageInstance
 }
 

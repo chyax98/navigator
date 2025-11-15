@@ -822,17 +822,17 @@ export const useBookmarkStore = defineStore('bookmark', () => {
           )
 
           if (needsUpdate) {
-            // ✅ 核心逻辑：只更新 Chrome 同步的字段，保留用户自定义字段
+            // 只更新 Chrome 同步的字段，保留用户自定义字段
             const updatedBookmark = {
               ...existing,
-              // Chrome 管理的字段（从 Chrome API 同步）
+              // Chrome 管理的字段
               title: chromeBookmark.title,
               url: chromeBookmark.url,
               categoryId: chromeBookmark.categoryId,
               sort: chromeBookmark.sort,
               updatedAt: new Date(),
               // 用户自定义字段（保持不变）
-              isPinned: existing.isPinned,      // ✅ 保留置顶状态
+              isPinned: existing.isPinned,
               pinnedAt: existing.pinnedAt,
               tags: existing.tags,
               description: existing.description,
@@ -846,7 +846,6 @@ export const useBookmarkStore = defineStore('bookmark', () => {
             await searchManager.updateBookmark(preparedBookmark)
             updated++
           }
-          // 如果 Chrome 数据没变化，什么都不做（保持现有状态，包括 isPinned）
         }
       }
 

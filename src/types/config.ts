@@ -42,10 +42,10 @@ export interface AppConfig {
   enableSemanticSearch?: boolean
   semanticWeight?: number // 语义搜索权重 0-1
   keywordWeight?: number // 关键词搜索权重 0-1
-  aiApiProvider?: 'openai' | 'custom' // API提供商
+  aiApiProvider?: 'openai' | 'siliconflow' // API提供商
   openaiApiKey?: string // OpenAI API密钥
-  customApiBaseUrl?: string // 自定义API Base URL
-  customApiKey?: string // 自定义API密钥
+  siliconflowApiBaseUrl?: string // 硅基流动 API Base URL
+  siliconflowApiKey?: string // 硅基流动 API 密钥
   embeddingModel?: string // Embedding模型名
   chatModel?: string // 聊天模型名（用于AI标签生成）
 
@@ -91,12 +91,12 @@ export const defaultConfig: AppConfig = {
   enableSemanticSearch: false, // 默认关闭
   semanticWeight: 0.6,
   keywordWeight: 0.4,
-  aiApiProvider: 'custom', // 默认使用硅基流动
+  aiApiProvider: 'siliconflow', // 默认使用硅基流动
   openaiApiKey: '', // OpenAI API密钥（可选）
-  customApiBaseUrl: 'https://api.siliconflow.cn/v1', // 硅基流动API Base URL
-  customApiKey: '', // 硅基流动API密钥
-  embeddingModel: 'BAAI/bge-large-zh-v1.5', // 硅基流动推荐的中文embedding模型
-  chatModel: 'Qwen/Qwen2-7B-Instruct', // 硅基流动推荐的聊天模型
+  siliconflowApiBaseUrl: 'https://api.siliconflow.cn/v1', // 硅基流动API Base URL
+  siliconflowApiKey: '', // 硅基流动API密钥
+  embeddingModel: 'BAAI/bge-m3', // 硅基流动推荐的多语言embedding模型
+  chatModel: 'Qwen/Qwen3-8B', // 硅基流动 2025 最新免费模型
 
   // 网页元数据提取 API
   linkPreviewApiKey: '', // LinkPreview API 密钥（免费60次/小时）

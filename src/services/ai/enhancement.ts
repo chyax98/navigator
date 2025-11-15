@@ -220,9 +220,6 @@ ${categoriesText}
 }`
 
   try {
-    console.log('[suggestCategory] 发送 AI 请求')
-    console.log('[suggestCategory] 可用分类列表:', categories)
-
     const completion = await client.chat.completions.create({
       model,
       messages: [
@@ -240,14 +237,12 @@ ${categoriesText}
     })
 
     const responseText = completion.choices[0]?.message?.content?.trim()
-    console.log('[suggestCategory] AI 原始响应:', responseText)
 
     if (!responseText) {
       throw new Error('AI 返回空响应')
     }
 
     const result = parseAIResponse(responseText)
-    console.log('[suggestCategory] JSON 解析结果:', result)
 
     // 验证分类列表是否为空
     if (categories.length === 0) {
@@ -255,12 +250,6 @@ ${categoriesText}
     }
 
     // 使用双重匹配策略：ID 优先，Name 降级
-    console.log('[suggestCategory] 开始匹配分类:', {
-      returnedId: result.categoryId,
-      returnedName: result.categoryName,
-      availableCategories: categories.map(c => ({ id: c.id, name: c.name }))
-    })
-
     const matchedCategory = findMatchingCategory(
       result.categoryId,
       result.categoryName,
@@ -271,7 +260,6 @@ ${categoriesText}
       // 匹配成功：使用找到的分类
       result.categoryId = matchedCategory.id
       result.categoryName = matchedCategory.name
-      console.log('[suggestCategory] ✅ 匹配成功')
     } else {
       // 匹配失败：使用默认分类（第一个）
       console.warn('[suggestCategory] ❌ 匹配失败，使用默认分类')
@@ -280,12 +268,6 @@ ${categoriesText}
       result.categoryName = firstCategory.name
       result.reason = `AI推荐的分类不存在，已归类到「${firstCategory.name}」`
     }
-
-    console.log('[suggestCategory] 最终返回结果:', {
-      categoryId: result.categoryId,
-      categoryName: result.categoryName,
-      reason: result.reason
-    })
 
     return {
       categoryId: result.categoryId!,  // 断言非空

@@ -10,12 +10,20 @@ import type { HomepageItem, HomepageLayout } from '@/types/homepage'
 
 // 存储键名常量
 const STORAGE_KEYS = {
-  BOOKMARKS: 'navigator_bookmarks',
+  BOOKMARK_IDS: 'navigator_bookmark_ids',        // 书签 ID 列表
+  BOOKMARK_PREFIX: 'navigator_bookmark_',        // 书签数据前缀
   CATEGORIES: 'navigator_categories',
   CONFIG: 'navigator_config',
   HOMEPAGE_ITEMS: 'navigator_homepage_items',
   HOMEPAGE_LAYOUT: 'navigator_homepage_layout'
 } as const
+
+/**
+ * 生成书签存储键
+ */
+function getBookmarkKey(id: string): string {
+  return `${STORAGE_KEYS.BOOKMARK_PREFIX}${id}`
+}
 
 /**
  * 存储接口定义
@@ -132,36 +140,100 @@ class ChromeStorageManager implements StorageAdapter {
 
   // ===== 书签操作 =====
 
+  /**
+   * 获取所有书签 ID
+   */
+  private async getBookmarkIds(): Promise<string[]> {
+    const ids = await this.get<string[]>(STORAGE_KEYS.BOOKMARK_IDS)
+    return ids || []
+  }
+
+  /**
+   * 保存书签 ID 列表
+   */
+  private async saveBookmarkIds(ids: string[]): Promise<void> {
+    await this.set(STORAGE_KEYS.BOOKMARK_IDS, ids)
+  }
+
+  /**
+   * 获取所有书签（从各个独立的键读取）
+   */
   async getBookmarks(): Promise<Bookmark[]> {
     await this.ensureInitialized()
 
-    const bookmarks = await this.get<Bookmark[]>(STORAGE_KEYS.BOOKMARKS)
-    return bookmarks || []
+    const ids = await this.getBookmarkIds()
+    if (ids.length === 0) return []
+
+    // 批量读取所有书签
+    const keys = ids.map(id => getBookmarkKey(id))
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.get(keys, (result) => {
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message))
+        } else {
+          const bookmarks: Bookmark[] = []
+          ids.forEach(id => {
+            const bookmark = result[getBookmarkKey(id)]
+            if (bookmark) {
+              bookmarks.push(bookmark)
+            }
+          })
+          resolve(bookmarks)
+        }
+      })
+    })
   }
 
+  /**
+   * 保存单个书签（增量更新，只更新这一个书签）
+   */
   async saveBookmark(bookmark: Bookmark): Promise<void> {
     await this.ensureInitialized()
 
-    const bookmarks = await this.getBookmarks()
-    const index = bookmarks.findIndex(b => b.id === bookmark.id)
+    const key = getBookmarkKey(bookmark.id)
+    const ids = await this.getBookmarkIds()
 
-    if (index >= 0) {
-      bookmarks[index] = bookmark
+    // 使用批量操作，避免竞态
+    if (!ids.includes(bookmark.id)) {
+      ids.push(bookmark.id)
+      // 一次性更新书签数据和 ID 列表
+      return new Promise((resolve, reject) => {
+        chrome.storage.local.set({
+          [key]: bookmark,
+          [STORAGE_KEYS.BOOKMARK_IDS]: ids
+        }, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+          } else {
+            resolve()
+          }
+        })
+      })
     } else {
-      bookmarks.push(bookmark)
+      // 只更新书签数据（已存在的书签）
+      await this.set(key, bookmark)
     }
-
-    await this.set(STORAGE_KEYS.BOOKMARKS, bookmarks)
   }
 
+  /**
+   * 删除单个书签
+   */
   async deleteBookmark(id: string): Promise<void> {
     await this.ensureInitialized()
 
-    const bookmarks = await this.getBookmarks()
-    const filtered = bookmarks.filter(b => b.id !== id)
-    await this.set(STORAGE_KEYS.BOOKMARKS, filtered)
+    // 1. 删除书签数据
+    const key = getBookmarkKey(id)
+    await this.remove(key)
+
+    // 2. 从 ID 列表中移除
+    const ids = await this.getBookmarkIds()
+    const filtered = ids.filter(bookmarkId => bookmarkId !== id)
+    await this.saveBookmarkIds(filtered)
   }
 
+  /**
+   * 按分类获取书签
+   */
   async getBookmarksByCategory(categoryId: string): Promise<Bookmark[]> {
     const bookmarks = await this.getBookmarks()
     return bookmarks.filter(b => b.categoryId === categoryId)
@@ -275,7 +347,7 @@ class ChromeStorageManager implements StorageAdapter {
     try {
       const data = JSON.parse(jsonData)
 
-      // 导入书签
+      // 导入书签（增量导入）
       if (data.bookmarks && Array.isArray(data.bookmarks)) {
         for (const bookmark of data.bookmarks) {
           await this.saveBookmark(bookmark)
@@ -297,7 +369,6 @@ class ChromeStorageManager implements StorageAdapter {
         await this.saveHomepageItems(data.homepageItems)
       }
     } catch (error) {
-      console.error('Failed to import data:', error)
       throw new Error('Invalid data format')
     }
   }
@@ -305,11 +376,18 @@ class ChromeStorageManager implements StorageAdapter {
   async clearAll(): Promise<void> {
     await this.ensureInitialized()
 
+    // 1. 删除所有书签数据
+    const ids = await this.getBookmarkIds()
+    const bookmarkKeys = ids.map(id => getBookmarkKey(id))
+    await Promise.all(bookmarkKeys.map(key => this.remove(key)))
+
+    // 2. 删除其他数据
     await Promise.all([
-      this.remove(STORAGE_KEYS.BOOKMARKS),
+      this.remove(STORAGE_KEYS.BOOKMARK_IDS),
       this.remove(STORAGE_KEYS.CATEGORIES),
       this.remove(STORAGE_KEYS.CONFIG),
-      this.remove(STORAGE_KEYS.HOMEPAGE_ITEMS)
+      this.remove(STORAGE_KEYS.HOMEPAGE_ITEMS),
+      this.remove(STORAGE_KEYS.HOMEPAGE_LAYOUT)
     ])
   }
 }

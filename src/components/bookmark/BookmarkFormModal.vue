@@ -295,13 +295,6 @@ async function handleAISuggestCategory() {
       name: c.name
     }))
 
-    console.log('[AI推荐分类] 开始推荐，参数：', {
-      url: formData.value.url,
-      title: formData.value.title,
-      description: formData.value.description,
-      categories: categories
-    })
-
     const title = formData.value.title || extractDomainAsTitle(formData.value.url)
 
     const suggestion = await suggestCategory(
@@ -311,9 +304,6 @@ async function handleAISuggestCategory() {
       categories
     )
 
-    console.log('[AI推荐分类] 推荐结果：', suggestion)
-    console.log('[AI推荐分类] 当前分类选项：', categoryOptions.value)
-
     // 严格验证返回的分类 ID
     if (suggestion.categoryId && suggestion.categoryId.trim() !== '') {
       // 二次验证：确保分类 ID 在选项列表中
@@ -322,7 +312,6 @@ async function handleAISuggestCategory() {
       )
 
       if (categoryExists) {
-        console.log('[AI推荐分类] 设置分类ID：', suggestion.categoryId)
         formData.value.categoryId = suggestion.categoryId
         message.success(`🤖 ${suggestion.reason}`)
       } else {
@@ -344,7 +333,6 @@ async function handleAISuggestCategory() {
 async function handleSubmit() {
   // 防止重复提交
   if (submitting.value) {
-    console.log('[表单提交] 阻止重复提交')
     return
   }
 

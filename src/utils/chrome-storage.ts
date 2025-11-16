@@ -161,6 +161,9 @@ class ChromeStorageManager implements StorageAdapter {
   async getBookmarks(): Promise<Bookmark[]> {
     await this.ensureInitialized()
 
+    // 检查是否需要从旧格式迁移
+    await this.migrateOldBookmarksIfNeeded()
+
     const ids = await this.getBookmarkIds()
     if (ids.length === 0) return []
 
@@ -197,6 +200,78 @@ class ChromeStorageManager implements StorageAdapter {
         }
       })
     })
+  }
+
+  /**
+   * 从旧的数组格式迁移到新的按 ID 存储格式（只执行一次）
+   */
+  private migrated = false
+  private async migrateOldBookmarksIfNeeded(): Promise<void> {
+    if (this.migrated) return
+    this.migrated = true
+
+    try {
+      // 检查是否有旧格式的数据
+      const oldData = await this.get<Bookmark[]>('navigator_bookmarks')
+      if (!oldData || !Array.isArray(oldData) || oldData.length === 0) {
+        return
+      }
+
+      console.error('[迁移] 发现旧格式数据，开始迁移', oldData.length, '个书签')
+
+      // 迁移到新格式
+      const ids: string[] = []
+      const updates: Record<string, any> = {}
+
+      oldData.forEach(bookmark => {
+        ids.push(bookmark.id)
+
+        // 序列化 Date 字段
+        const serialized: any = {
+          ...bookmark,
+          createdAt: bookmark.createdAt instanceof Date
+            ? bookmark.createdAt.toISOString()
+            : bookmark.createdAt,
+          updatedAt: bookmark.updatedAt instanceof Date
+            ? bookmark.updatedAt.toISOString()
+            : bookmark.updatedAt
+        }
+
+        if (bookmark.lastVisited) {
+          serialized.lastVisited = bookmark.lastVisited instanceof Date
+            ? bookmark.lastVisited.toISOString()
+            : bookmark.lastVisited
+        }
+
+        if (bookmark.pinnedAt) {
+          serialized.pinnedAt = bookmark.pinnedAt instanceof Date
+            ? bookmark.pinnedAt.toISOString()
+            : bookmark.pinnedAt
+        }
+
+        updates[getBookmarkKey(bookmark.id)] = serialized
+      })
+
+      updates[STORAGE_KEYS.BOOKMARK_IDS] = ids
+
+      // 批量写入新数据
+      await new Promise<void>((resolve, reject) => {
+        chrome.storage.local.set(updates, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message))
+          } else {
+            resolve()
+          }
+        })
+      })
+
+      // 删除旧数据
+      await this.remove('navigator_bookmarks')
+
+      console.error('[迁移] 成功迁移', ids.length, '个书签')
+    } catch (error) {
+      console.error('[迁移] 数据迁移失败:', error)
+    }
   }
 
   /**

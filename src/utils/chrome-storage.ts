@@ -81,6 +81,8 @@ class ChromeStorageManager implements StorageAdapter {
 
     this.checkChromeStorage()
     this.initialized = true
+
+    console.error('[Chrome Storage] 初始化完成')
   }
 
   isInitialized(): boolean {
@@ -161,11 +163,18 @@ class ChromeStorageManager implements StorageAdapter {
   async getBookmarks(): Promise<Bookmark[]> {
     await this.ensureInitialized()
 
+    console.error('[Chrome Storage] 开始获取书签')
+
     // 检查是否需要从旧格式迁移
     await this.migrateOldBookmarksIfNeeded()
 
     const ids = await this.getBookmarkIds()
-    if (ids.length === 0) return []
+    console.error('[Chrome Storage] 书签 ID 列表:', ids)
+
+    if (ids.length === 0) {
+      console.error('[Chrome Storage] 没有书签数据')
+      return []
+    }
 
     // 批量读取所有书签
     const keys = ids.map(id => getBookmarkKey(id))
@@ -174,6 +183,7 @@ class ChromeStorageManager implements StorageAdapter {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
         } else {
+          console.error('[Chrome Storage] 读取到的原始数据:', result)
           const bookmarks: Bookmark[] = []
           ids.forEach(id => {
             const raw = result[getBookmarkKey(id)]
@@ -196,6 +206,7 @@ class ChromeStorageManager implements StorageAdapter {
               bookmarks.push(bookmark)
             }
           })
+          console.error('[Chrome Storage] 反序列化后的书签数量:', bookmarks.length)
           resolve(bookmarks)
         }
       })

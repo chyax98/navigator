@@ -173,8 +173,23 @@ class ChromeStorageManager implements StorageAdapter {
         } else {
           const bookmarks: Bookmark[] = []
           ids.forEach(id => {
-            const bookmark = result[getBookmarkKey(id)]
-            if (bookmark) {
+            const raw = result[getBookmarkKey(id)]
+            if (raw) {
+              // 反序列化 Date 字段
+              const bookmark: Bookmark = {
+                ...raw,
+                createdAt: new Date(raw.createdAt),
+                updatedAt: new Date(raw.updatedAt)
+              }
+
+              // 可选的 Date 字段
+              if (raw.lastVisited) {
+                bookmark.lastVisited = new Date(raw.lastVisited)
+              }
+              if (raw.pinnedAt) {
+                bookmark.pinnedAt = new Date(raw.pinnedAt)
+              }
+
               bookmarks.push(bookmark)
             }
           })
@@ -190,6 +205,21 @@ class ChromeStorageManager implements StorageAdapter {
   async saveBookmark(bookmark: Bookmark): Promise<void> {
     await this.ensureInitialized()
 
+    // 序列化 Date 字段（Chrome Storage 不支持 Date 对象）
+    const serialized: any = {
+      ...bookmark,
+      createdAt: bookmark.createdAt.toISOString(),
+      updatedAt: bookmark.updatedAt.toISOString()
+    }
+
+    // 可选的 Date 字段
+    if (bookmark.lastVisited) {
+      serialized.lastVisited = bookmark.lastVisited.toISOString()
+    }
+    if (bookmark.pinnedAt) {
+      serialized.pinnedAt = bookmark.pinnedAt.toISOString()
+    }
+
     const key = getBookmarkKey(bookmark.id)
     const ids = await this.getBookmarkIds()
 
@@ -199,7 +229,7 @@ class ChromeStorageManager implements StorageAdapter {
       // 一次性更新书签数据和 ID 列表
       return new Promise((resolve, reject) => {
         chrome.storage.local.set({
-          [key]: bookmark,
+          [key]: serialized,
           [STORAGE_KEYS.BOOKMARK_IDS]: ids
         }, () => {
           if (chrome.runtime.lastError) {
@@ -211,7 +241,7 @@ class ChromeStorageManager implements StorageAdapter {
       })
     } else {
       // 只更新书签数据（已存在的书签）
-      await this.set(key, bookmark)
+      await this.set(key, serialized)
     }
   }
 

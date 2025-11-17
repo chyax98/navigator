@@ -23,8 +23,8 @@ function resolveBaseURL(provider: AIProvider, baseURL?: string): string | undefi
 }
 
 // 默认使用硅基流动 2025 最新免费模型
-const DEFAULT_EMBEDDING_MODEL = 'BAAI/bge-m3' // 多语言 embedding 模型
-const DEFAULT_CHAT_MODEL = 'Qwen/Qwen3-8B' // 2025 最新免费模型
+const DEFAULT_EMBEDDING_MODEL = 'BAAI/bge-m3' // 多语言 embedding 模型（免费）
+const DEFAULT_CHAT_MODEL = 'Qwen/Qwen2.5-7B-Instruct' // 2025 最新免费模型（Qwen2.5）
 
 class AIServiceManager {
   private static instance: AIServiceManager

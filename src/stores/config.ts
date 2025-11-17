@@ -153,7 +153,7 @@ export const useConfigStore = defineStore('config', () => {
       }
 
       const embeddingModel = config.value.embeddingModel || 'BAAI/bge-m3'
-      const chatModel = config.value.chatModel || 'Qwen/Qwen3-8B'
+      const chatModel = config.value.chatModel || 'Qwen/Qwen2.5-7B-Instruct'
 
       aiServiceManager.updateConfig({
         provider,

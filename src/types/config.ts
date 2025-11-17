@@ -95,8 +95,8 @@ export const defaultConfig: AppConfig = {
   openaiApiKey: '', // OpenAI API密钥（可选）
   siliconflowApiBaseUrl: 'https://api.siliconflow.cn/v1', // 硅基流动API Base URL
   siliconflowApiKey: '', // 硅基流动API密钥
-  embeddingModel: 'BAAI/bge-m3', // 硅基流动推荐的多语言embedding模型
-  chatModel: 'Qwen/Qwen3-8B', // 硅基流动 2025 最新免费模型
+  embeddingModel: 'BAAI/bge-m3', // 硅基流动推荐的多语言embedding模型（免费）
+  chatModel: 'Qwen/Qwen2.5-7B-Instruct', // 硅基流动 2025 最新免费模型（Qwen2.5）
 
   // 网页元数据提取 API
   linkPreviewApiKey: '', // LinkPreview API 密钥（免费60次/小时）

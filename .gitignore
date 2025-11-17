@@ -63,3 +63,4 @@ specs/
 dist-extension/
 navigator-extension.zip
 public/icons/*.png
+.env.extension

@@ -44,7 +44,13 @@ function unwrapProxy<T>(value: T): T {
 
 function normalizeDateValue(value: unknown): Date {
   if (value instanceof Date) {
-    return new Date(value.getTime())
+    // 检查 Date 对象是否有效（排除 Invalid Date）
+    if (!Number.isNaN(value.getTime())) {
+      return new Date(value.getTime())
+    }
+    // 无效的 Date 对象,fallback 到当前时间
+    console.warn('[normalizeDateValue] Invalid Date object detected, using current time', value)
+    return new Date()
   }
 
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -193,18 +199,17 @@ function prepareBookmarkForStorage(bookmark: Bookmark): Bookmark {
     clickCount: typeof raw.clickCount === 'number' && Number.isFinite(raw.clickCount) ? raw.clickCount : 0,
     isPinned: Boolean(raw.isPinned),
     sort: typeof raw.sort === 'number' && Number.isFinite(raw.sort) ? raw.sort : 0,
-    source: raw.source || 'user'
+    source: raw.source || 'user',
+    chromeId: raw.chromeId
   }
 
   if (raw.lastVisited) {
     prepared.lastVisited = normalizeDateValue(raw.lastVisited)
   }
 
-  // 只有在书签被置顶时才设置 pinnedAt，否则确保不保存该字段
   if (prepared.isPinned) {
     prepared.pinnedAt = normalizeDateValue(raw.pinnedAt ?? new Date())
   }
-  // 注意：如果 isPinned 为 false，则不设置 pinnedAt 字段（保持 undefined）
 
   return prepared
 }
@@ -924,7 +929,9 @@ export const useBookmarkStore = defineStore('bookmark', () => {
           updatedAt: bookmark.updatedAt instanceof Date ? bookmark.updatedAt : new Date(bookmark.updatedAt),
           sort: typeof bookmark.sort === 'number' && Number.isFinite(bookmark.sort) ? bookmark.sort : index,
           // 标准化 source 字段：Chrome 书签用 'chrome'，其他默认 'user'
-          source: (bookmark as any).source === 'chrome' ? 'chrome' : 'user'
+          source: (bookmark as any).source === 'chrome' ? 'chrome' : 'user',
+          // 显式保留置顶状态（确保布尔值不被意外覆盖）
+          isPinned: Boolean(bookmark.isPinned)
         }
 
         if (normalized.sort !== bookmark.sort || (bookmark as any).source === undefined) {
@@ -944,10 +951,11 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       })
 
       normalizedBookmarks.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0))
+
+      // 重新索引排序号（但不立即保存）
       normalizedBookmarks.forEach((bookmark, index) => {
         if (bookmark.sort !== index) {
           bookmark.sort = index
-          updateMap.set(bookmark.id, bookmark)
         }
       })
 
@@ -964,7 +972,8 @@ export const useBookmarkStore = defineStore('bookmark', () => {
 
       categories.value = normalizedCategories
 
-      if (updateMap.size) {
+      // 只在需要更新 source 字段时才保存（其他情况不保存，避免覆盖）
+      if (updateMap.size > 0) {
         await persistBookmarks(Array.from(updateMap.values()))
       }
 

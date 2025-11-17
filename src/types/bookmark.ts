@@ -13,7 +13,7 @@ export interface Bookmark {
   favicon?: string
   categoryId: string
   tags: string[]
-  notes?: string // Markdown 格式笔记
+  notes?: string
   createdAt: Date
   updatedAt: Date
   isPrivate: boolean
@@ -22,7 +22,8 @@ export interface Bookmark {
   isPinned?: boolean
   pinnedAt?: Date
   sort: number
-  source: BookmarkSource // 书签来源：user=用户创建，chrome=Chrome同步
+  source: BookmarkSource
+  chromeId?: string
 }
 
 // 分类来源类型

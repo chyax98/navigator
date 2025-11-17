@@ -137,13 +137,19 @@ function convertChromeBookmarkToBookmark(
   node: chrome.bookmarks.BookmarkTreeNode,
   categoryId: string
 ): Bookmark {
+  // Chrome dateAdded 是微秒时间戳（16位）,需除以1000转换为毫秒
+  // 示例: 1731811200000000 (微秒) → 1731811200000 (毫秒) → 2024-11-17
+  const createdAt = node.dateAdded
+    ? new Date(Math.floor(node.dateAdded / 1000))
+    : new Date()
+
   return {
     id: `${CHROME_BOOKMARK_ID_PREFIX}${node.id}`,
     title: node.title || node.url || 'Untitled',
     url: node.url!,
     categoryId,
     tags: [],
-    createdAt: node.dateAdded ? new Date(node.dateAdded) : new Date(),
+    createdAt,
     updatedAt: new Date(),
     isPrivate: false,
     clickCount: 0,

@@ -18,48 +18,26 @@ export type RuntimeEnvironment = 'chrome-extension' | 'web'
  */
 export function detectEnvironment(): RuntimeEnvironment {
   // 检查是否在 Chrome Extension 环境
-  const hasChrome = typeof chrome !== 'undefined'
-  const hasStorage = hasChrome && chrome.storage
-  const hasRuntimeId = hasChrome && chrome.runtime?.id
-
-  console.error('[环境检测]', {
-    hasChrome,
-    hasStorage,
-    hasRuntimeId,
-    runtimeId: hasRuntimeId ? chrome.runtime.id : 'N/A'
-  })
-
-  if (hasChrome && hasStorage && hasRuntimeId) {
-    console.error('[环境检测] 使用 Chrome Extension Storage')
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.runtime?.id) {
     return 'chrome-extension'
   }
-
-  // 默认为 Web 环境（使用 IndexedDB）
-  console.error('[环境检测] 使用 IndexedDB (Web)')
   return 'web'
 }
 
 /**
- * Chrome Extension 存储代理（懒加载 chrome-storage 模块）
+ * Chrome Extension 存储代理
  */
 class ChromeStorageProxy implements StorageAdapter {
   private managerPromise: Promise<any>
 
   constructor() {
-    console.error('[ChromeStorageProxy] 构造函数调用')
-    // 使用 Promise 缓存，确保模块只加载一次
     this.managerPromise = import('./chrome-storage').then(
-      module => {
-        console.error('[ChromeStorageProxy] chrome-storage 模块加载完成')
-        return module.chromeStorageManager || module.default
-      }
+      module => module.chromeStorageManager || module.default
     )
   }
 
   private async getManager(): Promise<any> {
-    const manager = await this.managerPromise
-    console.error('[ChromeStorageProxy] getManager 返回 manager')
-    return manager
+    return await this.managerPromise
   }
 
   isInitialized(): boolean {
@@ -295,27 +273,15 @@ let storageInstance: StorageAdapter | null = null
 
 export function getStorage(): StorageAdapter {
   if (storageInstance) {
-    console.error('[Storage Factory] 返回已有实例')
     return storageInstance
   }
 
   const env = detectEnvironment()
 
-  switch (env) {
-    case 'chrome-extension': {
-      console.error('[Storage Factory] 创建 ChromeStorageProxy 实例')
-      // 使用 ChromeStorageProxy 代替原始 Proxy，避免每次调用都 import
-      storageInstance = new ChromeStorageProxy() as StorageAdapter
-      break
-    }
-
-    case 'web':
-    default: {
-      console.error('[Storage Factory] 创建 IndexedDBStorageAdapter 实例')
-      // 使用 IndexedDB（现有实现）
-      storageInstance = new IndexedDBStorageAdapter() as StorageAdapter
-      break
-    }
+  if (env === 'chrome-extension') {
+    storageInstance = new ChromeStorageProxy() as StorageAdapter
+  } else {
+    storageInstance = new IndexedDBStorageAdapter() as StorageAdapter
   }
 
   return storageInstance

@@ -45,6 +45,26 @@
         回到主页
       </n-button>
 
+      <!-- 同步 Chrome 书签 -->
+      <n-button
+        v-if="isChromeExtension"
+        secondary
+        :loading="syncing"
+        @click="handleSync"
+      >
+        <template #icon>
+          <n-icon>
+            <svg viewBox="0 0 24 24">
+              <path
+                fill="currentColor"
+                d="M12,18A6,6 0 0,1 6,12C6,11 6.25,10.03 6.7,9.2L5.24,7.74C4.46,8.97 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.97 17.3,14.8L18.76,16.26C19.54,15.03 20,13.57 20,12A8,8 0 0,0 12,4Z"
+              />
+            </svg>
+          </n-icon>
+        </template>
+        同步书签
+      </n-button>
+
       <!-- 布局设置 -->
       <n-popover
         v-model:show="showGridSettings"
@@ -134,19 +154,39 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { NButton, NIcon, NPopover } from 'naive-ui'
+import { NButton, NIcon, NPopover, useMessage } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
 import { useBookmarkStore } from '@/stores/bookmark'
 import SearchBox from '../common/SearchBox.vue'
 import BookmarkFormModal from '../bookmark/BookmarkFormModal.vue'
 import Settings from '@/views/Settings.vue'
 import GridSettingsPanel from '../homepage/GridSettingsPanel.vue'
+import { syncChromeBookmarks } from '@/services/chrome-sync'
 
 const configStore = useConfigStore()
 const bookmarkStore = useBookmarkStore()
+const message = useMessage()
 
 const showModal = ref(false)
 const showSettings = ref(false)
+const syncing = ref(false)
+
+const isChromeExtension = computed(() => {
+  return typeof chrome !== 'undefined' && chrome.bookmarks !== undefined
+})
+
+async function handleSync() {
+  syncing.value = true
+  try {
+    const result = await syncChromeBookmarks()
+    await bookmarkStore.loadBookmarks()
+    message.success(`同步完成：新增 ${result.added} 个，跳过 ${result.skipped} 个`)
+  } catch (error) {
+    message.error('同步失败：' + (error instanceof Error ? error.message : String(error)))
+  } finally {
+    syncing.value = false
+  }
+}
 const showGridSettings = ref(false)
 
 // 事件处理函数

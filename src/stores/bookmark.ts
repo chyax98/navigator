@@ -1260,6 +1260,11 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     await initializeSearchEngine()
   }
 
+  // 重建搜索索引（增量向量生成）
+  async function rebuildSearchIndex() {
+    await searchManager.rebuildIndex(bookmarks.value)
+  }
+
   function getDefaultCategories(): Category[] {
     return [
       {
@@ -1567,6 +1572,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     setViewMode,
     initializeSearchEngine,
     updateSearchConfig,
+    rebuildSearchIndex,
     toggleCategoryExpand,
     findCategoryById,
 

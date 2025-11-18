@@ -66,7 +66,7 @@ const message = useMessage()
 /**
  * 列数（本地状态）
  */
-const columns = ref(configStore.config.gridColumns)
+const columns = ref<number>(GRID_COLUMN_CONSTRAINTS.DEFAULT)
 
 /**
  * 监听 store 中的列数变化，同步到本地状态
@@ -75,7 +75,8 @@ watch(
   () => configStore.config.gridColumns,
   (newColumns) => {
     columns.value = newColumns
-  }
+  },
+  { immediate: true }
 )
 
 /**

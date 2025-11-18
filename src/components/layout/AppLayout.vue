@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { NLayout, NLayoutHeader, NLayoutContent, NButton, NIcon } from 'naive-ui'
 import TheHeader from './TheHeader.vue'
 import TheSidebar from './TheSidebar.vue'
@@ -92,11 +92,19 @@ const MIN_WIDTH = 200
 const MAX_WIDTH = 600
 const DEFAULT_WIDTH = 280
 
-// 从配置中读取或使用默认宽度
-const sidebarWidth = ref<number>(configStore.config.sidebarWidth ?? DEFAULT_WIDTH)
+// 侧边栏状态（使用默认值初始化，然后通过 watch 同步）
+const sidebarWidth = ref<number>(DEFAULT_WIDTH)
+const isCollapsed = ref<boolean>(false)
 
-// 侧边栏收起状态
-const isCollapsed = ref<boolean>(configStore.config.sidebarCollapsed ?? false)
+// 监听配置变化并同步到本地状态
+watch(
+  () => configStore.config,
+  (config) => {
+    sidebarWidth.value = config.sidebarWidth ?? DEFAULT_WIDTH
+    isCollapsed.value = config.sidebarCollapsed ?? false
+  },
+  { immediate: true, deep: true }
+)
 
 // 调整大小状态
 const isResizing = ref(false)

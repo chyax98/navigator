@@ -261,8 +261,12 @@ class ChromeStorageManager implements StorageAdapter {
     const data = await this.get<any>(STORAGE_KEYS.HOMEPAGE_LAYOUT)
 
     if (!data) {
+      DebugPanel.log('[ChromeStorage] 📭 getHomepageLayout: 存储为空')
       return null
     }
+
+    const itemCount = (data.items || []).length
+    DebugPanel.log('[ChromeStorage] 📦 getHomepageLayout: 读取', itemCount, '个主页书签')
 
     return {
       config: {
@@ -279,18 +283,22 @@ class ChromeStorageManager implements StorageAdapter {
   async saveHomepageLayout(layout: HomepageLayout): Promise<void> {
     await this.ensureInitialized()
 
-    const serialized = {
-      config: {
-        ...layout.config,
-        lastModified: layout.config.lastModified.toISOString()
-      },
-      items: layout.items.map(item => ({
-        ...item,
-        addedAt: item.addedAt.toISOString()
-      }))
-    }
+    // 使用互斥锁防止并发写入导致数据丢失
+    return this.acquireWriteLock(async () => {
+      const serialized = {
+        config: {
+          ...layout.config,
+          lastModified: layout.config.lastModified.toISOString()
+        },
+        items: layout.items.map(item => ({
+          ...item,
+          addedAt: item.addedAt.toISOString()
+        }))
+      }
 
-    await this.set(STORAGE_KEYS.HOMEPAGE_LAYOUT, serialized)
+      DebugPanel.log('[ChromeStorage] 💾 saveHomepageLayout: 保存', serialized.items.length, '个主页书签')
+      await this.set(STORAGE_KEYS.HOMEPAGE_LAYOUT, serialized)
+    })
   }
 
   async exportData(): Promise<string> {

@@ -91,9 +91,12 @@ export const useHomepageStore = defineStore('homepage', () => {
   async function loadLayout(): Promise<void> {
     try {
       loading.value = true
+      DebugPanel.log('[Homepage] 📂 开始加载主页布局...')
+
       const data = await storage.getHomepageLayout()
 
       if (!data) {
+        DebugPanel.log('[Homepage] 📭 存储为空，使用默认配置')
         // 使用默认配置
         config.value = { ...DEFAULT_CONFIG }
         items.value = []
@@ -102,10 +105,12 @@ export const useHomepageStore = defineStore('homepage', () => {
 
       // T039: 数据版本兼容性检查
       if (!data.config || !data.items) {
+        DebugPanel.log('[Homepage] ❌ 数据格式错误')
         throw new Error("Invalid layout data: missing required fields")
       }
 
       if (data.config.version !== DEFAULT_CONFIG.version) {
+        DebugPanel.log('[Homepage] ⚠️ 版本不匹配，重置为默认')
         console.warn(
           `Layout version mismatch: expected ${DEFAULT_CONFIG.version}, got ${data.config.version}. Resetting to default.`
         )
@@ -117,6 +122,7 @@ export const useHomepageStore = defineStore('homepage', () => {
       // 恢复数据（storage 已经处理了 Date 反序列化）
       config.value = data.config
       items.value = data.items
+      DebugPanel.log('[Homepage] ✅ 加载完成，主页书签数:', items.value.length)
 
       // 修复布局
       await repairLayout()

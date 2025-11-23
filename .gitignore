@@ -32,12 +32,13 @@ dist-extension
 # Test artifacts
 test-results/
 playwright-report/
-tests/
-__tests__/
-*.spec.ts
-*.spec.js
-*.test.ts
-*.test.js
+# 允许提交测试文件（用于 TDD 开发流程）
+# tests/
+# __tests__/
+# *.spec.ts
+# *.spec.js
+# *.test.ts
+# *.test.js
 
 # Coverage reports
 coverage/

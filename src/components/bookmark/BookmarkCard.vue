@@ -222,6 +222,7 @@ const emit = defineEmits<{
   delete: [bookmark: Bookmark]
   detail: [bookmark: Bookmark]
   'add-to-homepage': [bookmark: Bookmark]
+  'toggle-pin': [bookmark: Bookmark]
 }>()
 
 // 检查书签是否已在主页

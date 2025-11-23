@@ -37,6 +37,7 @@
       @edit="$emit('edit', $event)"
       @delete="$emit('delete', $event)"
       @add-to-homepage="$emit('add-to-homepage', $event)"
+      @toggle-pin="$emit('toggle-pin', $event)"
     />
 
     <!-- 递归展示子分类 -->
@@ -52,6 +53,7 @@
         @edit="$emit('edit', $event)"
         @delete="$emit('delete', $event)"
         @add-to-homepage="$emit('add-to-homepage', $event)"
+        @toggle-pin="$emit('toggle-pin', $event)"
       />
     </div>
   </div>
@@ -77,6 +79,7 @@ defineEmits<{
   edit: [bookmark: Bookmark]
   delete: [bookmark: Bookmark]
   'add-to-homepage': [bookmark: Bookmark]
+  'toggle-pin': [bookmark: Bookmark]
 }>()
 
 const bookmarkStore = useBookmarkStore()

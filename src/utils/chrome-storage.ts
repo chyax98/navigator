@@ -6,6 +6,7 @@
 import type { Bookmark, Category } from '@/types/bookmark'
 import type { AppConfig } from '@/types/config'
 import type { HomepageItem, HomepageLayout } from '@/types/homepage'
+import { DebugPanel } from './debug'
 
 const STORAGE_KEYS = {
   BOOKMARKS: 'navigator_bookmarks',
@@ -129,7 +130,22 @@ class ChromeStorageManager implements StorageAdapter {
   async getBookmarks(): Promise<Bookmark[]> {
     await this.ensureInitialized()
     const data = await this.get<any[]>(STORAGE_KEYS.BOOKMARKS)
-    if (!data) return []
+    if (!data) {
+      DebugPanel.log('[ChromeStorage] 📭 getBookmarks: 存储为空')
+      return []
+    }
+
+    DebugPanel.log('[ChromeStorage] 📦 getBookmarks: 读取', data.length, '个书签')
+
+    // 统计置顶书签数量
+    const pinnedInStorage = data.filter(raw => raw.isPinned === true).length
+    if (pinnedInStorage > 0) {
+      DebugPanel.log('[ChromeStorage] 📍 存储中有', pinnedInStorage, '个置顶书签')
+      // 显示前 3 个置顶书签的详情
+      data.filter(raw => raw.isPinned === true).slice(0, 3).forEach(raw => {
+        DebugPanel.log('[ChromeStorage] 📌', raw.title, '| isPinned =', raw.isPinned, '| pinnedAt =', raw.pinnedAt)
+      })
+    }
 
     return data.map(raw => ({
       ...raw,
@@ -151,8 +167,10 @@ class ChromeStorageManager implements StorageAdapter {
       const index = bookmarks.findIndex(b => b.id === bookmark.id)
 
       if (index >= 0) {
+        DebugPanel.log('[ChromeStorage] 🔄 saveBookmark: 更新', bookmark.title, '| isPinned =', bookmark.isPinned)
         bookmarks[index] = { ...bookmark, updatedAt: new Date() }
       } else {
+        DebugPanel.log('[ChromeStorage] ➕ saveBookmark: 新增', bookmark.title, '| isPinned =', bookmark.isPinned)
         bookmarks.push({ ...bookmark, createdAt: new Date(), updatedAt: new Date() })
       }
 
@@ -164,6 +182,10 @@ class ChromeStorageManager implements StorageAdapter {
         lastVisited: b.lastVisited?.toISOString(),
         pinnedAt: b.pinnedAt?.toISOString()
       }))
+
+      // 统计置顶书签数量
+      const pinnedCount = serialized.filter(b => b.isPinned === true).length
+      DebugPanel.log('[ChromeStorage] 💾 saveBookmark: 写入存储，共', serialized.length, '个书签，其中', pinnedCount, '个置顶')
 
       await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
     })
@@ -198,11 +220,17 @@ class ChromeStorageManager implements StorageAdapter {
   async getCategories(): Promise<Category[]> {
     await this.ensureInitialized()
     const categories = await this.get<Category[]>(STORAGE_KEYS.CATEGORIES)
-    return categories || []
+    if (!categories || categories.length === 0) {
+      DebugPanel.log('[ChromeStorage] 📭 getCategories: 存储为空')
+      return []
+    }
+    DebugPanel.log('[ChromeStorage] 📦 getCategories: 读取', categories.length, '个分类')
+    return categories
   }
 
   async saveCategories(categories: Category[]): Promise<void> {
     await this.ensureInitialized()
+    DebugPanel.log('[ChromeStorage] 💾 saveCategories: 保存', categories.length, '个分类')
     await this.set(STORAGE_KEYS.CATEGORIES, categories)
   }
 

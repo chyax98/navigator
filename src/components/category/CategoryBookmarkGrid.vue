@@ -40,6 +40,7 @@
         @edit="handleEdit"
         @delete="handleDelete"
         @add-to-homepage="handleAddToHomepage"
+        @toggle-pin="handleTogglePin"
       />
 
       <!-- 子分类及其书签（递归展示） -->
@@ -54,6 +55,7 @@
           @edit="handleEdit"
           @delete="handleDelete"
           @add-to-homepage="handleAddToHomepage"
+          @toggle-pin="handleTogglePin"
         />
       </div>
     </div>
@@ -145,6 +147,10 @@ function handleDelete(bookmark: Bookmark) {
 
 async function handleAddToHomepage(bookmark: Bookmark) {
   await homepageStore.addBookmark(bookmark.id)
+}
+
+function handleTogglePin(bookmark: Bookmark) {
+  bookmarkStore.toggleBookmarkPin(bookmark.id)
 }
 </script>
 

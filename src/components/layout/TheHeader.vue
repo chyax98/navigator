@@ -161,7 +161,6 @@ import SearchBox from '../common/SearchBox.vue'
 import BookmarkFormModal from '../bookmark/BookmarkFormModal.vue'
 import Settings from '@/views/Settings.vue'
 import GridSettingsPanel from '../homepage/GridSettingsPanel.vue'
-import { syncChromeBookmarks } from '@/services/chrome-sync'
 
 const configStore = useConfigStore()
 const bookmarkStore = useBookmarkStore()
@@ -178,12 +177,10 @@ const isChromeExtension = computed(() => {
 async function handleSync() {
   syncing.value = true
   try {
-    const result = await syncChromeBookmarks()
-    // 重新加载书签（从存储读取）
-    await bookmarkStore.loadBookmarks()
+    const result = await bookmarkStore.syncFromChrome()
     // 🔥 增量生成向量（只处理新增的书签）
     await bookmarkStore.rebuildSearchIndex()
-    message.success(`同步完成：新增 ${result.added} 个，跳过 ${result.skipped} 个`)
+    message.success(`同步完成：新增 ${result.added} 个`)
   } catch (error) {
     message.error('同步失败：' + (error instanceof Error ? error.message : String(error)))
   } finally {

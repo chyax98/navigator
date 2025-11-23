@@ -4,6 +4,7 @@
  */
 
 import type { Bookmark, Category, BookmarkSource, CategorySource } from '@/types/bookmark'
+import { DebugPanel } from '@/utils/debug'
 
 /**
  * Chrome 书签位置 ID
@@ -52,13 +53,26 @@ export async function getChromeBookmarksBar(): Promise<{
         }
 
         const root = nodes[0]
+        DebugPanel.log('[getChromeBookmarksBar] 📂 Chrome 根节点子节点数量:', root.children?.length)
+
         const allBookmarks: Bookmark[] = []
         const allCategories: Category[] = []
 
         // 读取书签栏（id="1"）
         const bookmarksBar = root.children?.find(node => node.id === BOOKMARKS_BAR_ID)
+        DebugPanel.log('[getChromeBookmarksBar] 📌 书签栏子节点数量:', bookmarksBar?.children?.length)
+
+        // 调试：显示前3个子节点的类型
+        if (bookmarksBar?.children) {
+          const samples = bookmarksBar.children.slice(0, 3).map(n =>
+            `${n.title}(${n.url ? 'bookmark' : 'folder'})`
+          ).join(', ')
+          DebugPanel.log('[getChromeBookmarksBar] 📝 前3个节点:', samples)
+        }
+
         if (bookmarksBar) {
           const barResult = traverseBookmarkNode(bookmarksBar, null, ['书签栏'])
+          DebugPanel.log('[getChromeBookmarksBar] ✅ 书签栏结果: 书签', barResult.bookmarks.length, '个, 分类', barResult.categories.length, '个')
           allBookmarks.push(...barResult.bookmarks)
           allCategories.push(...barResult.categories)
         }
@@ -93,6 +107,10 @@ function traverseBookmarkNode(
 
   // 跳过根节点本身，直接处理其子节点
   const children = node.children || []
+  DebugPanel.log(`[traverseBookmarkNode] 📂 处理节点: ${node.title}, 子节点数: ${children.length}`)
+
+  let folderCount = 0
+  let bookmarkCount = 0
 
   for (const child of children) {
     if (child.url) {
@@ -102,10 +120,13 @@ function traverseBookmarkNode(
         parentCategoryId || CHROME_BOOKMARKS_BAR_CATEGORY_ID
       )
       bookmarks.push(bookmark)
+      bookmarkCount++
     } else {
       // 这是一个文件夹，转换为分类
+      folderCount++
       const category = convertChromeNodeToCategory(child, parentCategoryId)
       categories.push(category)
+      DebugPanel.log(`[traverseBookmarkNode] ➕ 发现文件夹: ${child.title}, ID: ${category.id}`)
 
       // 递归处理子节点
       const childPath = [...path, child.title || 'Untitled']
@@ -119,6 +140,8 @@ function traverseBookmarkNode(
       categories.push(...childResult.categories)
     }
   }
+
+  DebugPanel.log(`[traverseBookmarkNode] ✅ ${node.title}: 文件夹 ${folderCount} 个, 书签 ${bookmarkCount} 个`)
 
   return { bookmarks, categories }
 }
@@ -163,6 +186,7 @@ function convertChromeBookmarkToBookmark(
     updatedAt: new Date(),
     isPrivate: false,
     clickCount: 0,
+    isPinned: false, // Chrome 书签默认不置顶
     sort: node.index || 0,
     source: 'chrome' as BookmarkSource // Chrome 同步的书签
   }

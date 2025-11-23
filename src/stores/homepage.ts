@@ -16,6 +16,7 @@ import type {
 } from '@/types/homepage'
 import { DEFAULT_CONFIG, COLUMN_CONSTRAINTS } from '@/types/homepage'
 import { getStorage } from '@/utils/storage-factory'
+import { DebugPanel } from '@/utils/debug'
 
 export const useHomepageStore = defineStore('homepage', () => {
   const bookmarkStore = useBookmarkStore()
@@ -136,9 +137,12 @@ export const useHomepageStore = defineStore('homepage', () => {
    */
   async function persistLayout(): Promise<void> {
     try {
+      DebugPanel.log('[Homepage] 💾 开始保存布局，当前书签数:', items.value.length)
+
       // T040: 持久化前验证数据完整性
       const validation = validateLayout()
       if (!validation.valid) {
+        DebugPanel.log('[Homepage] ❌ 布局验证失败:', validation.errors)
         console.error("Cannot persist invalid layout:", validation.errors)
         throw new Error(`Invalid layout: ${validation.errors.join(", ")}`)
       }
@@ -150,8 +154,11 @@ export const useHomepageStore = defineStore('homepage', () => {
         items: items.value
       }
 
+      DebugPanel.log('[Homepage] 📝 准备保存:', items.value.length, '个书签项')
       await storage.saveHomepageLayout(layout)
+      DebugPanel.log('[Homepage] ✅ 保存成功')
     } catch (error) {
+      DebugPanel.log('[Homepage] ❌ 保存失败:', (error as Error).message)
       console.error('Failed to persist homepage layout:', error)
       throw error
     }
@@ -171,9 +178,11 @@ export const useHomepageStore = defineStore('homepage', () => {
       throw new Error(`Bookmark not found: ${bookmarkId}`)
     }
 
+    DebugPanel.log('[Homepage] ➕ 添加书签到主页:', bookmark.title, '| ID:', bookmarkId)
+
     // 检查是否已存在主页
     if (hasBookmark(bookmarkId)) {
-      console.warn(`Bookmark already in homepage: ${bookmarkId}`)
+      DebugPanel.log('[Homepage] ⚠️ 书签已在主页:', bookmarkId)
       return
     }
 
@@ -185,8 +194,10 @@ export const useHomepageStore = defineStore('homepage', () => {
     }
 
     items.value.push(newItem)
+    DebugPanel.log('[Homepage] 📊 当前主页书签数:', items.value.length)
     reindexItems()
     await persistLayout()
+    DebugPanel.log('[Homepage] ✅ 添加完成')
   }
 
   /**

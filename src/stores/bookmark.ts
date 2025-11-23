@@ -7,6 +7,7 @@ import { ref, computed, toRaw, isProxy } from 'vue'
 import type { Bookmark, Category, SearchResult, BookmarkSource, CategorySource } from '@/types/bookmark'
 import { getStorage } from '@/utils/storage-factory'
 import { searchManager } from '@/utils/search'
+import { DebugPanel } from '@/utils/debug'
 
 // 使用工厂函数获取环境适配的存储实现
 const storageManager = getStorage()
@@ -235,6 +236,8 @@ export const useBookmarkStore = defineStore('bookmark', () => {
 
   // Getters
   const filteredBookmarks = computed(() => {
+    DebugPanel.log('[filteredBookmarks] 🔎 当前状态: viewMode=', viewMode.value, ', selectedCategoryId=', selectedCategoryId.value)
+
     if (searchQuery.value) {
       return searchResults.value.map(r => r.bookmark)
     }
@@ -250,14 +253,21 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     // 主页视图：显示置顶书签
     if (isHomepage) {
       filtered = bookmarks.value.filter(b => b.isPinned)
+      DebugPanel.log('[filteredBookmarks] 📍 主页视图：显示置顶书签', filtered.length, '/', bookmarks.value.length)
     }
     // Chrome 书签栏视图：显示 Chrome 书签（从 bookmarks.value 中过滤）
     else if (selectedCategoryId.value === CHROME_BOOKMARKS_BAR_CATEGORY_ID) {
       filtered = bookmarks.value.filter(b => b.source === 'chrome')
+      DebugPanel.log('[filteredBookmarks] 🌐 Chrome 书签栏视图：过滤前', bookmarks.value.length, '个，过滤后', filtered.length, '个')
+
+      // 调试：显示前 5 个书签的 source
+      const samples = bookmarks.value.slice(0, 5).map(b => `${b.title}(source=${b.source})`).join(', ')
+      DebugPanel.log('[filteredBookmarks] 📝 前5个书签:', samples)
     }
-    // 分类视图：显示对应分类的书签
+    // 分类视图：显示对应分类的书签（包括子分类）
     else {
-      filtered = bookmarks.value.filter(b => b.categoryId === selectedCategoryId.value)
+      filtered = getCategoryBookmarks(selectedCategoryId.value)
+      DebugPanel.log('[filteredBookmarks] 📁 分类视图：', selectedCategoryId.value, '有', filtered.length, '个书签（包括子分类）')
     }
 
     // URL 去重：同一个 URL 只保留一个书签
@@ -298,6 +308,9 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     })
 
     const deduplicated = Array.from(uniqueByUrl.values())
+    if (filtered.length !== deduplicated.length) {
+      DebugPanel.log('[filteredBookmarks] 🔍 URL 去重：', filtered.length, '→', deduplicated.length)
+    }
     return sortBookmarks(deduplicated, sortType)
   })
 
@@ -323,7 +336,10 @@ export const useBookmarkStore = defineStore('bookmark', () => {
   // 获取分类下的所有书签（包括子分类）
   function getCategoryBookmarks(categoryId: string): Bookmark[] {
     const category = categories.value.find(c => c.id === categoryId)
-    if (!category) return []
+    if (!category) {
+      DebugPanel.log('[getCategoryBookmarks] ⚠️ 未找到分类:', categoryId)
+      return []
+    }
 
     // 直接书签
     const directBookmarks = bookmarks.value.filter(b => b.categoryId === categoryId)
@@ -331,11 +347,17 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     // 子分类书签
     const childBookmarks: Bookmark[] = []
     const childCategories = categories.value.filter(c => c.parentId === categoryId)
+
+    DebugPanel.log('[getCategoryBookmarks] 📂', category.name, ': 直接书签', directBookmarks.length, '个, 子分类', childCategories.length, '个')
+
     childCategories.forEach(child => {
-      childBookmarks.push(...getCategoryBookmarks(child.id))
+      const childResults = getCategoryBookmarks(child.id)
+      childBookmarks.push(...childResults)
     })
 
-    return [...directBookmarks, ...childBookmarks]
+    const total = [...directBookmarks, ...childBookmarks]
+    DebugPanel.log('[getCategoryBookmarks] ✅', category.name, ': 总共', total.length, '个书签')
+    return total
   }
 
   const bookmarkCount = computed(() => bookmarks.value.length)
@@ -745,13 +767,14 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     }
 
     try {
+      DebugPanel.log('[syncFromChrome] 🔄 开始同步...')
+
       // 从 Chrome API 读取最新数据
       const { bookmarks: chromeBookmarks, categories: chromeCategories } = await getChromeBookmarksBar()
+      DebugPanel.log('[syncFromChrome] 📥 从 Chrome 读取:', chromeBookmarks.length, '个书签,', chromeCategories.length, '个分类')
 
       // 统计
       let added = 0
-      let updated = 0
-      let deleted = 0
 
       // 1. 同步分类
       // 创建 Chrome 分类的 ID 映射
@@ -768,11 +791,17 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       )
 
       // 添加或更新 Chrome 分类
+      DebugPanel.log('[syncFromChrome] 📂 准备同步', chromeCategories.length, '个 Chrome 分类')
+      let categoriesAdded = 0
+      let categoriesUpdated = 0
+
       for (const chromeCategory of chromeCategories) {
         const existingIndex = categories.value.findIndex(c => c.id === chromeCategory.id)
         if (existingIndex === -1) {
           // 新增分类
           categories.value.push(chromeCategory)
+          categoriesAdded++
+          DebugPanel.log('[syncFromChrome] ➕ 新增分类:', chromeCategory.name)
         } else {
           // 检查是否需要更新
           const existing = categories.value[existingIndex]
@@ -781,117 +810,70 @@ export const useBookmarkStore = defineStore('bookmark', () => {
             existing.parentId !== chromeCategory.parentId ||
             existing.sort !== chromeCategory.sort
           ) {
-            categories.value[existingIndex] = chromeCategory
-          }
-        }
-      }
-
-      // 保存分类到 IndexedDB（只保存用户分类，Chrome 分类不持久化）
-      const userCategories = categories.value.filter(c => c.source === 'user')
-      const categoriesForStorage = userCategories.map(cat => prepareCategoryForStorage(cat))
-      await storageManager.saveCategories(categoriesForStorage)
-
-
-      // 2. 同步书签（增量更新：只更新 Chrome 管理的字段，保留用户自定义字段）
-      const chromeBookmarkMap = new Map(chromeBookmarks.map(b => [b.id, b]))
-      const existingChromeBookmarks = bookmarks.value.filter(b => b.source === 'chrome')
-
-      // 删除 Chrome 中已不存在的书签
-      for (const existing of existingChromeBookmarks) {
-        if (!chromeBookmarkMap.has(existing.id)) {
-          await deleteBookmark(existing.id)
-          deleted++
-        }
-      }
-
-      // 批量收集需要保存的书签（避免循环中多次读写冲突）
-      const bookmarksToAdd: Bookmark[] = []
-      const bookmarksToUpdate: Bookmark[] = []
-
-      for (const chromeBookmark of chromeBookmarks) {
-        const existingIndex = bookmarks.value.findIndex(b => b.id === chromeBookmark.id)
-
-        if (existingIndex === -1) {
-          // 新书签（Chrome 新增）
-          const preparedBookmark = prepareBookmarkForStorage(chromeBookmark)
-          bookmarks.value.push(preparedBookmark)
-          bookmarksToAdd.push(preparedBookmark)
-          added++
-        } else {
-          // 已存在的书签：只更新 Chrome 管理的字段，保留用户自定义字段
-          const existing = bookmarks.value[existingIndex]
-
-          // 检查 Chrome 侧数据是否变化
-          const needsUpdate = (
-            existing.title !== chromeBookmark.title ||
-            existing.url !== chromeBookmark.url ||
-            existing.categoryId !== chromeBookmark.categoryId ||
-            existing.sort !== chromeBookmark.sort
-          )
-
-          if (needsUpdate) {
-            // 只更新 Chrome 同步的字段，保留用户自定义字段
-            const updatedBookmark = {
+            categories.value[existingIndex] = {
               ...existing,
               // Chrome 管理的字段
-              title: chromeBookmark.title,
-              url: chromeBookmark.url,
-              categoryId: chromeBookmark.categoryId,
-              sort: chromeBookmark.sort,
-              updatedAt: new Date(),
-              // 用户自定义字段（保持不变）
-              isPinned: existing.isPinned,
-              pinnedAt: existing.pinnedAt,
-              tags: existing.tags,
-              description: existing.description,
-              favicon: existing.favicon,
-              clickCount: existing.clickCount,
-              lastVisited: existing.lastVisited
+              name: chromeCategory.name,
+              parentId: chromeCategory.parentId,
+              sort: chromeCategory.sort,
+              source: 'chrome'
             }
-            const preparedBookmark = prepareBookmarkForStorage(updatedBookmark)
-            bookmarks.value[existingIndex] = preparedBookmark
-            bookmarksToUpdate.push(preparedBookmark)
-            updated++
+            categoriesUpdated++
           }
         }
       }
 
-      // 批量保存到存储（一次性写入，避免多次读写冲突）
-      if (bookmarksToAdd.length > 0 || bookmarksToUpdate.length > 0) {
-        // 一次性保存所有书签到 Chrome Storage
-        const serialized = bookmarks.value.map(b => ({
-          ...b,
-          isPinned: Boolean(b.isPinned),
-          createdAt: b.createdAt.toISOString(),
-          updatedAt: b.updatedAt.toISOString(),
-          lastVisited: b.lastVisited?.toISOString(),
-          pinnedAt: b.pinnedAt?.toISOString()
-        }))
+      DebugPanel.log('[syncFromChrome] 📊 分类变更: 新增', categoriesAdded, '个, 更新', categoriesUpdated, '个')
 
-        await new Promise<void>((resolve, reject) => {
-          chrome.storage.local.set({ navigator_bookmarks: serialized }, () => {
-            if (chrome.runtime.lastError) {
-              reject(new Error(chrome.runtime.lastError.message))
-            } else {
-              resolve()
-            }
-          })
-        })
+      // 保存所有分类到存储（包括 Chrome 分类，确保刷新后不丢失）
+      const categoriesForStorage = categories.value.map(cat => prepareCategoryForStorage(cat))
+      DebugPanel.log('[syncFromChrome] 💾 准备保存', categoriesForStorage.length, '个分类到存储')
+      await storageManager.saveCategories(categoriesForStorage)
+      DebugPanel.log('[syncFromChrome] ✅ 分类保存完成')
 
-        // 批量更新搜索索引
-        for (const bookmark of bookmarksToAdd) {
-          await searchManager.addBookmark(bookmark)
+
+      // 2. 同步书签（只增不删：URL 去重）
+      DebugPanel.log('[syncFromChrome] 📊 当前已有书签:', bookmarks.value.length, '个')
+
+      const existingUrls = new Set(
+        bookmarks.value.map(b => normalizeUrl(b.url))
+      )
+      DebugPanel.log('[syncFromChrome] 🔍 已有 URL 数量:', existingUrls.size)
+
+      const bookmarksToAdd: Bookmark[] = []
+
+      for (const chromeBookmark of chromeBookmarks) {
+        const normalizedUrl = normalizeUrl(chromeBookmark.url)
+
+        // 跳过已存在的 URL（按 URL 去重，不按 ID）
+        if (existingUrls.has(normalizedUrl)) {
+          continue
         }
-        for (const bookmark of bookmarksToUpdate) {
-          await searchManager.updateBookmark(bookmark)
-        }
+
+        // 新书签：添加到列表
+        const preparedBookmark = prepareBookmarkForStorage(chromeBookmark)
+        bookmarks.value.push(preparedBookmark)
+        bookmarksToAdd.push(preparedBookmark)
+        existingUrls.add(normalizedUrl)
+        added++
       }
+
+      DebugPanel.log('[syncFromChrome] ➕ 需要新增:', bookmarksToAdd.length, '个书签')
+
+      // 逐个保存（使用互斥锁保护，确保数据安全）
+      for (const bookmark of bookmarksToAdd) {
+        DebugPanel.log('[syncFromChrome] 💾 保存:', bookmark.title)
+        await storageManager.saveBookmark(bookmark)
+        await searchManager.addBookmark(bookmark)
+      }
+
+      DebugPanel.log('[syncFromChrome] ✅ 同步完成，新增:', added, '个')
 
       // 更新配置：记录同步时间
       configStore.config.lastChromeSyncTime = new Date().toISOString()
       await storageManager.saveConfig(configStore.config)
 
-      return { added, updated, deleted }
+      return { added, updated: 0, deleted: 0 }
     } catch (error) {
       console.error('Failed to sync Chrome bookmarks:', error)
       throw error
@@ -947,12 +929,15 @@ export const useBookmarkStore = defineStore('bookmark', () => {
   // Actions
   async function loadBookmarks() {
     try {
+      DebugPanel.log('[loadBookmarks] 📂 开始加载书签...')
       loading.value = true
 
       const [loadedBookmarks, loadedCategories] = await Promise.all([
         storageManager.getBookmarks(),
         storageManager.getCategories()
       ])
+
+      DebugPanel.log('[loadBookmarks] 📥 从存储读取:', loadedBookmarks.length, '个书签')
 
       const updateMap = new Map<string, Bookmark>()
       const normalizedBookmarks = (loadedBookmarks || []).map((bookmark, index) => {
@@ -994,6 +979,14 @@ export const useBookmarkStore = defineStore('bookmark', () => {
 
       bookmarks.value = normalizedBookmarks
 
+      // 统计书签分布
+      const chromeCount = normalizedBookmarks.filter(b => b.source === 'chrome').length
+      const userCount = normalizedBookmarks.filter(b => b.source === 'user').length
+      const pinnedCount = normalizedBookmarks.filter(b => b.isPinned).length
+
+      DebugPanel.log('[loadBookmarks] ✅ 最终加载:', normalizedBookmarks.length, '个书签到内存')
+      DebugPanel.log('[loadBookmarks] 📊 分布: Chrome', chromeCount, '个, User', userCount, '个, 置顶', pinnedCount, '个')
+
       // 标准化分类数据，确保所有必需字段都存在
       const normalizedCategories = (loadedCategories || getDefaultCategories()).map(category => ({
         ...category,
@@ -1004,6 +997,11 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       }))
 
       categories.value = normalizedCategories
+
+      // 统计分类分布
+      const chromeCategories = normalizedCategories.filter(c => c.source === 'chrome').length
+      const userCategories = normalizedCategories.filter(c => c.source === 'user').length
+      DebugPanel.log('[loadBookmarks] 📁 分类: Chrome', chromeCategories, '个, User', userCategories, '个, 总计', normalizedCategories.length, '个')
 
       // 只在需要更新 source 字段时才保存（其他情况不保存，避免覆盖）
       if (updateMap.size > 0) {
@@ -1049,16 +1047,26 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     const index = bookmarks.value.findIndex(b => b.id === id)
     if (index === -1) return
 
+    const originalBookmark = bookmarks.value[index]
+    DebugPanel.log('[updateBookmark] 📝 更新前:', originalBookmark.title, '| isPinned =', originalBookmark.isPinned)
+    DebugPanel.log('[updateBookmark] 📝 更新参数:', JSON.stringify(updates))
+
     const updatedBookmark = {
       ...unwrapProxy(bookmarks.value[index]),
       ...updates,
       updatedAt: new Date()
     }
 
+    DebugPanel.log('[updateBookmark] 📝 合并后:', updatedBookmark.title, '| isPinned =', updatedBookmark.isPinned)
+
     const preparedBookmark = prepareBookmarkForStorage(updatedBookmark)
+    DebugPanel.log('[updateBookmark] 📝 准备保存:', preparedBookmark.title, '| isPinned =', preparedBookmark.isPinned)
+
     bookmarks.value[index] = preparedBookmark
     await storageManager.saveBookmark(preparedBookmark)
     await searchManager.updateBookmark(preparedBookmark)
+
+    DebugPanel.log('[updateBookmark] ✅ 更新完成，内存中 isPinned =', bookmarks.value[index].isPinned)
   }
 
   async function toggleBookmarkPin(id: string) {

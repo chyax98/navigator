@@ -47,6 +47,7 @@
             @delete="emit('delete', $event)"
             @detail="handleDetail($event)"
             @add-to-homepage="emit('add-to-homepage', $event)"
+            @toggle-pin="emit('toggle-pin', $event)"
           />
         </div>
       </template>
@@ -98,6 +99,7 @@ const emit = defineEmits<{
   edit: [bookmark: Bookmark]
   delete: [bookmark: Bookmark]
   'add-to-homepage': [bookmark: Bookmark]
+  'toggle-pin': [bookmark: Bookmark]
 }>()
 
 const bookmarkStore = useBookmarkStore()

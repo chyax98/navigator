@@ -804,7 +804,10 @@ export const useBookmarkStore = defineStore('bookmark', () => {
         }
       }
 
-      // 更新或添加书签
+      // 批量收集需要保存的书签（避免循环中多次读写冲突）
+      const bookmarksToAdd: Bookmark[] = []
+      const bookmarksToUpdate: Bookmark[] = []
+
       for (const chromeBookmark of chromeBookmarks) {
         const existingIndex = bookmarks.value.findIndex(b => b.id === chromeBookmark.id)
 
@@ -812,8 +815,7 @@ export const useBookmarkStore = defineStore('bookmark', () => {
           // 新书签（Chrome 新增）
           const preparedBookmark = prepareBookmarkForStorage(chromeBookmark)
           bookmarks.value.push(preparedBookmark)
-          await storageManager.saveBookmark(preparedBookmark)
-          await searchManager.addBookmark(preparedBookmark)
+          bookmarksToAdd.push(preparedBookmark)
           added++
         } else {
           // 已存在的书签：只更新 Chrome 管理的字段，保留用户自定义字段
@@ -848,10 +850,40 @@ export const useBookmarkStore = defineStore('bookmark', () => {
             }
             const preparedBookmark = prepareBookmarkForStorage(updatedBookmark)
             bookmarks.value[existingIndex] = preparedBookmark
-            await storageManager.saveBookmark(preparedBookmark)
-            await searchManager.updateBookmark(preparedBookmark)
+            bookmarksToUpdate.push(preparedBookmark)
             updated++
           }
+        }
+      }
+
+      // 批量保存到存储（一次性写入，避免多次读写冲突）
+      if (bookmarksToAdd.length > 0 || bookmarksToUpdate.length > 0) {
+        // 一次性保存所有书签到 Chrome Storage
+        const serialized = bookmarks.value.map(b => ({
+          ...b,
+          isPinned: Boolean(b.isPinned),
+          createdAt: b.createdAt.toISOString(),
+          updatedAt: b.updatedAt.toISOString(),
+          lastVisited: b.lastVisited?.toISOString(),
+          pinnedAt: b.pinnedAt?.toISOString()
+        }))
+
+        await new Promise<void>((resolve, reject) => {
+          chrome.storage.local.set({ navigator_bookmarks: serialized }, () => {
+            if (chrome.runtime.lastError) {
+              reject(new Error(chrome.runtime.lastError.message))
+            } else {
+              resolve()
+            }
+          })
+        })
+
+        // 批量更新搜索索引
+        for (const bookmark of bookmarksToAdd) {
+          await searchManager.addBookmark(bookmark)
+        }
+        for (const bookmark of bookmarksToUpdate) {
+          await searchManager.updateBookmark(bookmark)
         }
       }
 

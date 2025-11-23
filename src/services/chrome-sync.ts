@@ -68,13 +68,28 @@ export async function syncChromeBookmarks(): Promise<{ added: number; skipped: n
       }
 
       try {
-        const bookmarksBar = tree[0]?.children?.find(n => n.id === '1')
-        if (!bookmarksBar) {
+        const root = tree[0]
+        if (!root || !root.children) {
           resolve({ added: 0, skipped: 0 })
           return
         }
 
-        const chromeBookmarks = flattenBookmarks(bookmarksBar)
+        // 读取所有书签（书签栏 + 其他书签）
+        const allChromeBookmarks: ChromeBookmarkNode[] = []
+
+        // 书签栏 (id="1")
+        const bookmarksBar = root.children.find(n => n.id === '1')
+        if (bookmarksBar) {
+          allChromeBookmarks.push(...flattenBookmarks(bookmarksBar))
+        }
+
+        // 其他书签 (id="2")
+        const otherBookmarks = root.children.find(n => n.id === '2')
+        if (otherBookmarks) {
+          allChromeBookmarks.push(...flattenBookmarks(otherBookmarks))
+        }
+
+        const chromeBookmarks = allChromeBookmarks
         let localBookmarks = await storage.getBookmarks()
 
         const existingUrls = new Set(

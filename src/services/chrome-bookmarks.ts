@@ -6,9 +6,11 @@
 import type { Bookmark, Category, BookmarkSource, CategorySource } from '@/types/bookmark'
 
 /**
- * Chrome 书签栏 ID（固定为 "1"）
+ * Chrome 书签位置 ID
  */
-const BOOKMARKS_BAR_ID = '1'
+const BOOKMARKS_BAR_ID = '1'        // 书签栏
+const OTHER_BOOKMARKS_ID = '2'      // 其他书签
+// const MOBILE_BOOKMARKS_ID = '3'  // 移动设备书签（暂不支持）
 
 /**
  * Chrome 书签栏分类 ID 前缀
@@ -25,7 +27,7 @@ export function isChromeExtension(): boolean {
 }
 
 /**
- * 获取 Chrome 书签栏中的所有书签和分类
+ * 获取所有 Chrome 书签（书签栏 + 其他书签）
  */
 export async function getChromeBookmarksBar(): Promise<{
   bookmarks: Bookmark[]
@@ -38,7 +40,6 @@ export async function getChromeBookmarksBar(): Promise<{
 
   try {
     return new Promise<{ bookmarks: Bookmark[]; categories: Category[] }>((resolve, reject) => {
-      // 使用 getTree 获取整棵树，然后找到书签栏
       chrome.bookmarks.getTree((nodes: chrome.bookmarks.BookmarkTreeNode[]) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message))
@@ -50,22 +51,31 @@ export async function getChromeBookmarksBar(): Promise<{
           return
         }
 
-        // Chrome 书签树结构：根节点 -> 书签栏 (id="1")
         const root = nodes[0]
-        const bookmarksBar = root.children?.find(node => node.id === BOOKMARKS_BAR_ID)
+        const allBookmarks: Bookmark[] = []
+        const allCategories: Category[] = []
 
-        if (!bookmarksBar) {
-          console.warn('Bookmarks bar not found')
-          resolve({ bookmarks: [], categories: [] })
-          return
+        // 读取书签栏（id="1"）
+        const bookmarksBar = root.children?.find(node => node.id === BOOKMARKS_BAR_ID)
+        if (bookmarksBar) {
+          const barResult = traverseBookmarkNode(bookmarksBar, null, ['书签栏'])
+          allBookmarks.push(...barResult.bookmarks)
+          allCategories.push(...barResult.categories)
         }
 
-        const result = traverseBookmarkNode(bookmarksBar, null, [])
-        resolve(result)
+        // 读取其他书签（id="2"）
+        const otherBookmarks = root.children?.find(node => node.id === OTHER_BOOKMARKS_ID)
+        if (otherBookmarks) {
+          const otherResult = traverseBookmarkNode(otherBookmarks, null, ['其他书签'])
+          allBookmarks.push(...otherResult.bookmarks)
+          allCategories.push(...otherResult.categories)
+        }
+
+        resolve({ bookmarks: allBookmarks, categories: allCategories })
       })
     })
   } catch (error) {
-    console.error('Failed to get Chrome bookmarks bar:', error)
+    console.error('Failed to get Chrome bookmarks:', error)
     return { bookmarks: [], categories: [] }
   }
 }

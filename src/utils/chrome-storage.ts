@@ -36,10 +36,44 @@ export interface StorageAdapter {
 
 class ChromeStorageManager implements StorageAdapter {
   private initialized = false
+  private writeLock: Promise<void> = Promise.resolve()
+  private lockQueue = 0 // 统计锁队列长度（调试用）
 
   private checkChromeStorage(): void {
     if (typeof chrome === 'undefined' || !chrome.storage) {
       throw new Error('Chrome Storage API not available')
+    }
+  }
+
+  /**
+   * 互斥锁：确保同一时间只有一个写操作执行
+   * 防止读-改-写竞态导致数据丢失
+   */
+  private async acquireWriteLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previousLock = this.writeLock
+    let releaseLock: () => void
+
+    this.writeLock = new Promise<void>(resolve => {
+      releaseLock = resolve
+    })
+
+    this.lockQueue++
+    const queuePosition = this.lockQueue
+
+    // 开发环境下打印调试信息
+    if (import.meta.env.DEV && queuePosition > 1) {
+      console.log(`[ChromeStorage] 写操作排队中... (队列位置: ${queuePosition})`)
+    }
+
+    try {
+      await previousLock
+      if (import.meta.env.DEV && queuePosition > 1) {
+        console.log(`[ChromeStorage] 写操作开始执行 (队列位置: ${queuePosition})`)
+      }
+      return await operation()
+    } finally {
+      this.lockQueue--
+      releaseLock!()
     }
   }
 
@@ -110,42 +144,50 @@ class ChromeStorageManager implements StorageAdapter {
 
   async saveBookmark(bookmark: Bookmark): Promise<void> {
     await this.ensureInitialized()
-    const bookmarks = await this.getBookmarks()
-    const index = bookmarks.findIndex(b => b.id === bookmark.id)
 
-    if (index >= 0) {
-      bookmarks[index] = { ...bookmark, updatedAt: new Date() }
-    } else {
-      bookmarks.push({ ...bookmark, createdAt: new Date(), updatedAt: new Date() })
-    }
+    // 使用互斥锁防止并发写入导致数据丢失
+    return this.acquireWriteLock(async () => {
+      const bookmarks = await this.getBookmarks()
+      const index = bookmarks.findIndex(b => b.id === bookmark.id)
 
-    const serialized = bookmarks.map(b => ({
-      ...b,
-      isPinned: Boolean(b.isPinned),
-      createdAt: b.createdAt.toISOString(),
-      updatedAt: b.updatedAt.toISOString(),
-      lastVisited: b.lastVisited?.toISOString(),
-      pinnedAt: b.pinnedAt?.toISOString()
-    }))
+      if (index >= 0) {
+        bookmarks[index] = { ...bookmark, updatedAt: new Date() }
+      } else {
+        bookmarks.push({ ...bookmark, createdAt: new Date(), updatedAt: new Date() })
+      }
 
-    await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
+      const serialized = bookmarks.map(b => ({
+        ...b,
+        isPinned: Boolean(b.isPinned),
+        createdAt: b.createdAt.toISOString(),
+        updatedAt: b.updatedAt.toISOString(),
+        lastVisited: b.lastVisited?.toISOString(),
+        pinnedAt: b.pinnedAt?.toISOString()
+      }))
+
+      await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
+    })
   }
 
   async deleteBookmark(id: string): Promise<void> {
     await this.ensureInitialized()
-    const bookmarks = await this.getBookmarks()
-    const filtered = bookmarks.filter(b => b.id !== id)
 
-    const serialized = filtered.map(b => ({
-      ...b,
-      isPinned: Boolean(b.isPinned),
-      createdAt: b.createdAt.toISOString(),
-      updatedAt: b.updatedAt.toISOString(),
-      lastVisited: b.lastVisited?.toISOString(),
-      pinnedAt: b.pinnedAt?.toISOString()
-    }))
+    // 使用互斥锁防止并发写入导致数据丢失
+    return this.acquireWriteLock(async () => {
+      const bookmarks = await this.getBookmarks()
+      const filtered = bookmarks.filter(b => b.id !== id)
 
-    await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
+      const serialized = filtered.map(b => ({
+        ...b,
+        isPinned: Boolean(b.isPinned),
+        createdAt: b.createdAt.toISOString(),
+        updatedAt: b.updatedAt.toISOString(),
+        lastVisited: b.lastVisited?.toISOString(),
+        pinnedAt: b.pinnedAt?.toISOString()
+      }))
+
+      await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
+    })
   }
 
   async getBookmarksByCategory(categoryId: string): Promise<Bookmark[]> {
@@ -244,46 +286,52 @@ class ChromeStorageManager implements StorageAdapter {
   }
 
   async importData(jsonData: string): Promise<void> {
-    try {
-      const data = JSON.parse(jsonData)
+    // 使用互斥锁防止并发写入导致数据丢失
+    return this.acquireWriteLock(async () => {
+      try {
+        const data = JSON.parse(jsonData)
 
-      if (data.bookmarks && Array.isArray(data.bookmarks)) {
-        const serialized = data.bookmarks.map((b: any) => ({
-          ...b,
-          createdAt: b.createdAt,
-          updatedAt: b.updatedAt,
-          lastVisited: b.lastVisited,
-          pinnedAt: b.pinnedAt
-        }))
-        await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
-      }
+        if (data.bookmarks && Array.isArray(data.bookmarks)) {
+          const serialized = data.bookmarks.map((b: any) => ({
+            ...b,
+            createdAt: b.createdAt,
+            updatedAt: b.updatedAt,
+            lastVisited: b.lastVisited,
+            pinnedAt: b.pinnedAt
+          }))
+          await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
+        }
 
-      if (data.categories && Array.isArray(data.categories)) {
-        await this.saveCategories(data.categories)
-      }
+        if (data.categories && Array.isArray(data.categories)) {
+          await this.saveCategories(data.categories)
+        }
 
-      if (data.config) {
-        await this.saveConfig(data.config)
-      }
+        if (data.config) {
+          await this.saveConfig(data.config)
+        }
 
-      if (data.homepageItems && Array.isArray(data.homepageItems)) {
-        await this.saveHomepageItems(data.homepageItems)
+        if (data.homepageItems && Array.isArray(data.homepageItems)) {
+          await this.saveHomepageItems(data.homepageItems)
+        }
+      } catch (error) {
+        throw new Error('Invalid data format')
       }
-    } catch (error) {
-      throw new Error('Invalid data format')
-    }
+    })
   }
 
   async clearAll(): Promise<void> {
     await this.ensureInitialized()
 
-    await Promise.all([
-      this.remove(STORAGE_KEYS.BOOKMARKS),
-      this.remove(STORAGE_KEYS.CATEGORIES),
-      this.remove(STORAGE_KEYS.CONFIG),
-      this.remove(STORAGE_KEYS.HOMEPAGE_ITEMS),
-      this.remove(STORAGE_KEYS.HOMEPAGE_LAYOUT)
-    ])
+    // 使用互斥锁防止清空操作与其他写操作冲突
+    return this.acquireWriteLock(async () => {
+      await Promise.all([
+        this.remove(STORAGE_KEYS.BOOKMARKS),
+        this.remove(STORAGE_KEYS.CATEGORIES),
+        this.remove(STORAGE_KEYS.CONFIG),
+        this.remove(STORAGE_KEYS.HOMEPAGE_ITEMS),
+        this.remove(STORAGE_KEYS.HOMEPAGE_LAYOUT)
+      ])
+    })
   }
 }
 

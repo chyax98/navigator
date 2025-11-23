@@ -725,8 +725,11 @@ export const useBookmarkStore = defineStore('bookmark', () => {
       categories.value = categories.value.filter(c => c.source === 'user' || c.id === CHROME_BOOKMARKS_BAR_CATEGORY_ID)
       categories.value.push(...chromeCategories)
 
-      // 启动时自动同步 Chrome 书签（确保数据最新）
-      await syncFromChrome()
+      // 注意：不在启动时自动同步书签数据，避免以下问题：
+      // 1. 启动变慢（同步可能阻塞初始化）
+      // 2. 数据冲突（用户刚置顶书签后刷新，自动同步可能触发并发写入）
+      // 3. 不必要的开销（大部分时候 Chrome 书签没变化）
+      // 用户可以通过"同步 Chrome 书签"按钮手动触发同步
     } catch (error) {
       console.error('Failed to initialize Chrome bookmarks:', error)
     }

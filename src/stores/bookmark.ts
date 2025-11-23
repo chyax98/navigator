@@ -698,17 +698,14 @@ export const useBookmarkStore = defineStore('bookmark', () => {
     await searchManager.initialize(bookmarks.value, searchConfig)
   }
 
-  // 初始化 Chrome 书签（从 IndexedDB 缓存读取）
+  // 初始化 Chrome 书签分类（仅显示入口，不读取书签数据）
   async function initChromeBookmarks() {
     if (!isChromeExtension()) {
       return
     }
 
     try {
-      // 从 Chrome API 读取分类结构（分类不缓存，每次从 Chrome 读取）
-      const { categories: chromeCategories } = await getChromeBookmarksBar()
-
-      // 添加 Chrome 书签栏根分类
+      // 仅添加 Chrome 书签栏根分类（作为同步入口）
       const existingCategory = categories.value.find(c => c.id === CHROME_BOOKMARKS_BAR_CATEGORY_ID)
       if (!existingCategory) {
         categories.value.push({
@@ -721,15 +718,16 @@ export const useBookmarkStore = defineStore('bookmark', () => {
         })
       }
 
-      // 移除旧的 Chrome 分类，添加新的（分类结构实时从 Chrome 读取）
-      categories.value = categories.value.filter(c => c.source === 'user' || c.id === CHROME_BOOKMARKS_BAR_CATEGORY_ID)
-      categories.value.push(...chromeCategories)
-
-      // 注意：不在启动时自动同步书签数据，避免以下问题：
-      // 1. 启动变慢（同步可能阻塞初始化）
-      // 2. 数据冲突（用户刚置顶书签后刷新，自动同步可能触发并发写入）
-      // 3. 不必要的开销（大部分时候 Chrome 书签没变化）
-      // 用户可以通过"同步 Chrome 书签"按钮手动触发同步
+      // ⚠️ 重要：不在这里读取 Chrome 书签或分类数据
+      // 原因：
+      // 1. 每次刷新都读取会导致性能问题
+      // 2. getChromeBookmarksBar() 会读取所有 Chrome 书签，浪费资源
+      // 3. Chrome 分类结构只在用户点击"同步"时需要
+      //
+      // 用户操作流程：
+      // 1. 侧边栏显示"Chrome 书签栏"分类入口
+      // 2. 点击"同步 Chrome 书签"按钮 → 触发 syncFromChrome()
+      // 3. syncFromChrome() 会读取并保存 Chrome 书签到 IndexedDB
     } catch (error) {
       console.error('Failed to initialize Chrome bookmarks:', error)
     }

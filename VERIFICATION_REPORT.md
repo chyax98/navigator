@@ -45,7 +45,6 @@ async saveHomepageLayout(layout: HomepageLayout): Promise<void> {
       }))
     }
 
-    DebugPanel.log('[ChromeStorage] 💾 saveHomepageLayout: 保存', serialized.items.length, '个主页书签')
     await this.set(STORAGE_KEYS.HOMEPAGE_LAYOUT, serialized)
   })
 }

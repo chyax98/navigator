@@ -81,8 +81,6 @@ export const useConfigStore = defineStore('config', () => {
     enableSemanticSearch?: boolean
     semanticWeight?: number
     keywordWeight?: number
-    aiApiProvider?: 'openai' | 'siliconflow'
-    openaiApiKey?: string
     siliconflowApiBaseUrl?: string
     siliconflowApiKey?: string
     embeddingModel?: string
@@ -101,10 +99,8 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function getSemanticSearchConfig() {
-    const provider = config.value.aiApiProvider || 'openai'
-    const apiKey = provider === 'openai'
-      ? config.value.openaiApiKey?.trim()
-      : config.value.siliconflowApiKey?.trim()
+    const apiKey = config.value.siliconflowApiKey?.trim() ||
+      import.meta.env.VITE_SILICONFLOW_API_KEY?.trim()
 
     return {
       enableSemanticSearch: config.value.enableSemanticSearch || false,
@@ -128,29 +124,15 @@ export const useConfigStore = defineStore('config', () => {
   // Helper functions
   async function syncAiClients(): Promise<void> {
     try {
-      const provider = config.value.aiApiProvider || 'openai'
+      const provider = 'siliconflow' as const
 
-      // 获取 API Key：用户配置 > 环境变量 > 空字符串
-      let apiKey = ''
-      if (provider === 'openai') {
-        apiKey = config.value.openaiApiKey?.trim() ||
-                 import.meta.env.VITE_OPENAI_API_KEY?.trim() ||
-                 ''
-      } else {
-        apiKey = config.value.siliconflowApiKey?.trim() ||
-                 import.meta.env.VITE_SILICONFLOW_API_KEY?.trim() ||
-                 import.meta.env.VITE_CUSTOM_API_KEY?.trim() ||
-                 ''
-      }
+      const apiKey = config.value.siliconflowApiKey?.trim() ||
+        import.meta.env.VITE_SILICONFLOW_API_KEY?.trim() ||
+        ''
 
-      // 获取 Base URL：用户配置 > 环境变量 > undefined
-      let baseURL: string | undefined
-      if (provider === 'siliconflow') {
-        baseURL = config.value.siliconflowApiBaseUrl?.trim() ||
-                  import.meta.env.VITE_SILICONFLOW_BASE_URL?.trim() ||
-                  import.meta.env.VITE_CUSTOM_API_BASE_URL?.trim() ||
-                  undefined
-      }
+      const baseURL = config.value.siliconflowApiBaseUrl?.trim() ||
+        import.meta.env.VITE_SILICONFLOW_BASE_URL?.trim() ||
+        undefined
 
       const embeddingModel = config.value.embeddingModel || 'BAAI/bge-m3'
       const chatModel = config.value.chatModel || 'Qwen/Qwen2.5-7B-Instruct'

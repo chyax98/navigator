@@ -6,7 +6,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useHomepageStore } from '@/stores/homepage'
-import { useBookmarkStore } from '@/stores/bookmark'
 import type { HomepageLayout } from '@/types/homepage'
 
 // Mock storage adapter

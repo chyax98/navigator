@@ -3,7 +3,7 @@
  * 测试主页书签的添加、保存、加载功能
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 
 describe('Homepage Store', () => {

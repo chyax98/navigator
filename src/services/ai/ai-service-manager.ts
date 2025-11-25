@@ -1,6 +1,6 @@
 import OpenAI from 'openai'
 
-export type AIProvider = 'openai' | 'siliconflow'
+export type AIProvider = 'siliconflow'
 
 export interface AIServiceConfig {
   provider: AIProvider
@@ -10,27 +10,25 @@ export interface AIServiceConfig {
   chatModel: string
 }
 
-function sanitizeProvider(provider?: AIProvider): AIProvider {
-  return provider === 'siliconflow' ? 'siliconflow' : 'openai'
+function sanitizeProvider(): AIProvider {
+  return 'siliconflow'
 }
 
-function resolveBaseURL(provider: AIProvider, baseURL?: string): string | undefined {
+function resolveBaseURL(baseURL?: string): string | undefined {
   const trimmed = baseURL?.trim()
-  if (provider === 'siliconflow') {
-    return trimmed && trimmed.length > 0 ? trimmed : undefined
-  }
   return trimmed && trimmed.length > 0 ? trimmed : undefined
 }
 
 // 默认使用硅基流动 2025 最新免费模型
 const DEFAULT_EMBEDDING_MODEL = 'BAAI/bge-m3' // 多语言 embedding 模型（免费）
 const DEFAULT_CHAT_MODEL = 'Qwen/Qwen2.5-7B-Instruct' // 2025 最新免费模型（Qwen2.5）
+const DEFAULT_BASE_URL = 'https://api.siliconflow.cn/v1'
 
 class AIServiceManager {
   private static instance: AIServiceManager
 
   private config: AIServiceConfig = {
-    provider: 'openai',
+    provider: 'siliconflow',
     apiKey: '',
     baseURL: undefined,
     embeddingModel: DEFAULT_EMBEDDING_MODEL,
@@ -48,9 +46,9 @@ class AIServiceManager {
   }
 
   updateConfig(partial: Partial<AIServiceConfig>): void {
-    const provider = sanitizeProvider(partial.provider ?? this.config.provider)
+    const provider = sanitizeProvider()
     const apiKey = (partial.apiKey ?? this.config.apiKey ?? '').trim()
-    const baseURL = resolveBaseURL(provider, partial.baseURL ?? this.config.baseURL)
+    const baseURL = resolveBaseURL(partial.baseURL ?? this.config.baseURL)
     const embeddingModel = (partial.embeddingModel ?? this.config.embeddingModel ?? DEFAULT_EMBEDDING_MODEL).trim() || DEFAULT_EMBEDDING_MODEL
     const chatModel = (partial.chatModel ?? this.config.chatModel ?? DEFAULT_CHAT_MODEL).trim() || DEFAULT_CHAT_MODEL
 
@@ -113,7 +111,7 @@ class AIServiceManager {
     if (this.config.baseURL && this.config.baseURL.length > 0) {
       return this.config.baseURL
     }
-    return this.config.provider === 'openai' ? 'https://api.openai.com/v1' : undefined
+    return DEFAULT_BASE_URL
   }
 
   private buildSignature(config: AIServiceConfig): string {

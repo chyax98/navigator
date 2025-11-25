@@ -1,3 +1,5 @@
+/* global chrome */
+
 function clearStorage() {
   if (!confirm('确定要清空所有数据吗？此操作不可恢复！')) {
     return;

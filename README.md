@@ -68,7 +68,7 @@ npm run pack:ext
 **AI 集成**:
 
 - LinkPreview API (元数据提取)
-- OpenAI API (分类推荐)
+- 硅基流动 API（语义搜索与分类推荐）
 
 ---
 
@@ -214,9 +214,9 @@ clearAll(): Promise<void>
 # LinkPreview API（网页元数据提取）
 VITE_LINKPREVIEW_API_KEY=your-api-key
 
-# AI 功能（可选）
-VITE_OPENAI_API_KEY=your-openai-key
-VITE_CUSTOM_API_BASE_URL=https://api.example.com/v1
+# （可选）开发阶段的硅基流动默认配置
+VITE_SILICONFLOW_API_KEY=your-siliconflow-key
+VITE_SILICONFLOW_BASE_URL=https://api.siliconflow.cn/v1
 ```
 
 ---

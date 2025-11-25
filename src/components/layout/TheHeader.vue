@@ -171,7 +171,7 @@ const showSettings = ref(false)
 const syncing = ref(false)
 
 const isChromeExtension = computed(() => {
-  return typeof chrome !== 'undefined' && chrome.bookmarks !== undefined
+  return typeof window !== 'undefined' && typeof window.chrome !== 'undefined' && window.chrome.bookmarks !== undefined
 })
 
 async function handleSync() {

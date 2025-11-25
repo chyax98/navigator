@@ -42,8 +42,6 @@ export interface AppConfig {
   enableSemanticSearch?: boolean
   semanticWeight?: number // 语义搜索权重 0-1
   keywordWeight?: number // 关键词搜索权重 0-1
-  aiApiProvider?: 'openai' | 'siliconflow' // API提供商
-  openaiApiKey?: string // OpenAI API密钥
   siliconflowApiBaseUrl?: string // 硅基流动 API Base URL
   siliconflowApiKey?: string // 硅基流动 API 密钥
   embeddingModel?: string // Embedding模型名
@@ -91,8 +89,6 @@ export const defaultConfig: AppConfig = {
   enableSemanticSearch: false, // 默认关闭
   semanticWeight: 0.6,
   keywordWeight: 0.4,
-  aiApiProvider: 'siliconflow', // 默认使用硅基流动
-  openaiApiKey: '', // OpenAI API密钥（可选）
   siliconflowApiBaseUrl: 'https://api.siliconflow.cn/v1', // 硅基流动API Base URL
   siliconflowApiKey: '', // 硅基流动API密钥
   embeddingModel: 'BAAI/bge-m3', // 硅基流动推荐的多语言embedding模型（免费）

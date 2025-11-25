@@ -45,14 +45,6 @@ storage-factory.ts (环境检测)
 |--------|---------|---------|-----------|------|
 | theme | @update:value | handleThemeChange | setTheme | ✅ |
 | showFavicon | @update:value | handleConfigUpdate | updateConfig | ✅ |
-| enableSemanticSearch | @update:value | handleSemanticSearchToggle | updateSemanticSearchConfig | ✅ |
-| aiApiProvider | @update:value | handleApiProviderChange | updateSemanticSearchConfig | ✅ |
-| openaiApiKey | @update:value | handleApiKeyChange | updateSemanticSearchConfig | ✅ |
-| siliconflowApiBaseUrl | @update:value | handleSiliconflowBaseUrlChange | updateSemanticSearchConfig | ✅ |
-| siliconflowApiKey | @update:value | handleApiKeyChange | updateSemanticSearchConfig | ✅ |
-| embeddingModel | @update:value | handleEmbeddingModelChange | updateSemanticSearchConfig | ✅ |
-| chatModel | @update:value | handleChatModelChange | updateSemanticSearchConfig | ✅ |
-| semanticWeight | @update:value | handleConfigUpdate | updateConfig | ✅ |
 | linkPreviewApiKey | @update:value | handleLinkPreviewApiKeyChange | updateConfig | ✅ |
 
 **数据流：**
@@ -63,7 +55,7 @@ storage-factory.ts (环境检测)
          ↓
     handleXxxChange()
          ↓
-    configStore.updateConfig() / updateSemanticSearchConfig()
+    configStore.updateConfig()
          ↓
     storageManager.saveConfig()
          ↓
@@ -166,20 +158,6 @@ async function setTheme(theme: 'light' | 'dark' | 'auto'): Promise<void> {
 }
 ```
 
-### updateSemanticSearchConfig (AI 配置)
-
-```typescript
-async function updateSemanticSearchConfig(updates: {
-  enableSemanticSearch?: boolean
-  semanticWeight?: number
-  // ... 其他 AI 相关配置
-}): Promise<void> {
-  config.value = { ...config.value, ...updates }
-  await storageManager.saveConfig(config.value)
-  await syncAiClients()
-}
-```
-
 ### setHomepageSortType / setCategorySortType (排序配置)
 
 ```typescript
@@ -222,8 +200,6 @@ async function loadConfig() {
     config.value = { ...defaultConfig, ...saved }
   }
 
-  // 同步 AI 客户端配置
-  await syncAiClients()
 }
 ```
 
@@ -294,11 +270,6 @@ async getConfig(): Promise<AppConfig | null> {
    - 切换到暗色主题
    - 刷新页面
    - 验证主题保持为暗色 ✓
-
-5. **AI 配置**
-   - 启用语义搜索并配置 API Key
-   - 刷新页面
-   - 验证配置保持 ✓
 
 ## 结论
 

@@ -15,7 +15,10 @@
     </n-empty>
 
     <!-- 主页内容 -->
-    <div v-else class="homepage-content">
+    <div
+      v-else
+      class="homepage-content"
+    >
       <!-- 主页标题栏 -->
       <div class="homepage-header">
         <h2>我的主页</h2>

@@ -64,73 +64,38 @@
             </n-form-item>
 
             <template v-if="configStore.config.enableSemanticSearch">
-              <n-form-item label="AI API 提供商">
-                <n-radio-group
-                  v-model:value="configStore.config.aiApiProvider"
-                  @update:value="handleApiProviderChange"
-                >
-                  <n-radio value="siliconflow">
-                    硅基流动（推荐）
-                  </n-radio>
-                  <n-radio value="openai">
-                    OpenAI
-                  </n-radio>
-                </n-radio-group>
+              <n-form-item label="API Base URL">
+                <n-input
+                  v-model:value="configStore.config.siliconflowApiBaseUrl"
+                  placeholder="https://api.siliconflow.cn/v1"
+                  @update:value="handleSiliconflowBaseUrlChange"
+                />
                 <template #help>
-                  硅基流动提供高性价比的AI服务，支持中文优化模型。OpenAI提供全球标准服务。
+                  硅基流动 API 服务地址，留空使用默认值
                 </template>
               </n-form-item>
 
-              <!-- OpenAI 配置 -->
-              <template v-if="configStore.config.aiApiProvider === 'openai'">
-                <n-form-item label="OpenAI API 密钥">
-                  <n-input
-                    v-model:value="configStore.config.openaiApiKey"
-                    type="password"
-                    placeholder="sk-..."
-                    @update:value="handleApiKeyChange"
-                  />
-                  <template #help>
-                    从 OpenAI 获取 API 密钥
-                  </template>
-                </n-form-item>
-              </template>
-
-              <!-- 硅基流动API配置 -->
-              <template v-else>
-                <n-form-item label="API Base URL">
-                  <n-input
-                    v-model:value="configStore.config.siliconflowApiBaseUrl"
-                    placeholder="https://api.siliconflow.cn/v1"
-                    @update:value="handleSiliconflowBaseUrlChange"
-                  />
-                  <template #help>
-                    硅基流动 API 服务地址，留空使用默认值
-                  </template>
-                </n-form-item>
-
-                <n-form-item label="API 密钥">
-                  <n-input
-                    v-model:value="configStore.config.siliconflowApiKey"
-                    type="password"
-                    placeholder="sk-..."
-                    @update:value="handleApiKeyChange"
-                  />
-                  <template #help>
-                    硅基流动 API 密钥，<a
-                      href="https://cloud.siliconflow.cn"
-                      target="_blank"
-                      style="color: var(--n-text-color-primary); text-decoration: underline;"
-                    >免费注册</a>获取
-                  </template>
-                </n-form-item>
-              </template>
+              <n-form-item label="API 密钥">
+                <n-input
+                  v-model:value="configStore.config.siliconflowApiKey"
+                  type="password"
+                  placeholder="sk-..."
+                  @update:value="handleApiKeyChange"
+                />
+                <template #help>
+                  硅基流动 API 密钥，<a
+                    href="https://cloud.siliconflow.cn"
+                    target="_blank"
+                    style="color: var(--n-text-color-primary); text-decoration: underline;"
+                  >免费注册</a>获取
+                </template>
+              </n-form-item>
 
               <!-- 模型配置 -->
               <n-form-item label="Embedding 模型">
                 <n-input
                   v-model:value="configStore.config.embeddingModel"
-                  :placeholder="configStore.config.aiApiProvider === 'siliconflow' ? 'BAAI/bge-m3' : 'text-embedding-3-small'"
+                  placeholder="BAAI/bge-m3"
                   @update:value="handleEmbeddingModelChange"
                 />
                 <template #help>
@@ -141,7 +106,7 @@
               <n-form-item label="聊天模型">
                 <n-input
                   v-model:value="configStore.config.chatModel"
-                  :placeholder="configStore.config.aiApiProvider === 'siliconflow' ? 'Qwen/Qwen3-8B' : 'gpt-4o-mini'"
+                  placeholder="Qwen/Qwen3-8B"
                   @update:value="handleChatModelChange"
                 />
                 <template #help>
@@ -205,7 +170,7 @@
                     <strong>⚡ 性能优化：</strong>向量数据缓存在本地，重复搜索不消耗API额度
                   </div>
                   <div>
-                    <strong>🔧 技术支持：</strong>支持任何OpenAI兼容的API服务，可随时切换
+                    <strong>🔧 技术支持：</strong>基于硅基流动 OpenAI-Compatible API，可平滑升级
                   </div>
                   <div>
                     <strong>🛡️ 数据安全：</strong>所有向量计算在本地进行，API仅用于生成embedding
@@ -418,7 +383,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { NModal, NCard, NTabs, NTabPane, NForm, NFormItem, NSelect, NRadioGroup, NRadio, NSwitch, NSpace, NButton, NIcon, NTag, NSlider, NInput, NDivider, NAlert, useMessage, useDialog } from 'naive-ui'
+import { NModal, NCard, NTabs, NTabPane, NForm, NFormItem, NSelect, NSwitch, NSpace, NButton, NIcon, NTag, NSlider, NInput, NDivider, NAlert, useMessage, useDialog } from 'naive-ui'
 import { useConfigStore } from '@/stores/config'
 import { useBookmarkStore } from '@/stores/bookmark'
 import { storageManager } from '@/utils/storage'
@@ -551,32 +516,8 @@ async function handleSemanticSearchToggle(enabled: boolean) {
   await bookmarkStore.updateSearchConfig()
 }
 
-async function handleApiProviderChange(provider: 'openai' | 'siliconflow') {
-  const updates: {
-    aiApiProvider: 'openai' | 'siliconflow'
-    siliconflowApiBaseUrl?: string
-    siliconflowApiKey?: string
-    openaiApiKey?: string
-  } = { aiApiProvider: provider }
-  if (provider === 'openai') {
-    updates.siliconflowApiBaseUrl = ''
-    updates.siliconflowApiKey = ''
-  } else {
-    updates.openaiApiKey = ''
-  }
-
-  await configStore.updateSemanticSearchConfig(updates)
-  message.success(`已切换到${provider === 'openai' ? 'OpenAI' : '硅基流动'}`)
-  await bookmarkStore.updateSearchConfig()
-}
-
 async function handleApiKeyChange(apiKey: string) {
-  const provider = configStore.config.aiApiProvider || 'openai'
-  if (provider === 'openai') {
-    await configStore.updateSemanticSearchConfig({ openaiApiKey: apiKey })
-  } else {
-    await configStore.updateSemanticSearchConfig({ siliconflowApiKey: apiKey })
-  }
+  await configStore.updateSemanticSearchConfig({ siliconflowApiKey: apiKey })
   scheduleSearchRebuild()
   message.success('API配置已更新')
 }
@@ -598,10 +539,8 @@ async function handleChatModelChange(model: string) {
 }
 
 async function testApiConnection() {
-  const provider = configStore.config.aiApiProvider || 'openai'
-  const hasApiKey = provider === 'openai'
-    ? configStore.config.openaiApiKey?.trim()
-    : configStore.config.siliconflowApiKey?.trim()
+  const hasApiKey = configStore.config.siliconflowApiKey?.trim() ||
+    import.meta.env.VITE_SILICONFLOW_API_KEY?.trim()
 
   if (!hasApiKey) {
     semanticSearchStatus.value = {

@@ -6,7 +6,7 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch, isRef } from 'vue'
 import { useBookmarkStore } from './bookmark'
 import type {
   HomepageLayout,
@@ -16,10 +16,12 @@ import type {
 } from '@/types/homepage'
 import { DEFAULT_CONFIG, COLUMN_CONSTRAINTS } from '@/types/homepage'
 import { getStorage } from '@/utils/storage-factory'
-import { DebugPanel } from '@/utils/debug'
 
 export const useHomepageStore = defineStore('homepage', () => {
   const bookmarkStore = useBookmarkStore()
+  const bookmarkLoadingSource = isRef(bookmarkStore.loading)
+    ? bookmarkStore.loading
+    : computed(() => Boolean(bookmarkStore.loading))
   const storage = getStorage()
 
   // ===== State =====
@@ -43,6 +45,19 @@ export const useHomepageStore = defineStore('homepage', () => {
    * 拖拽状态
    */
   const dragging = ref(false)
+  let pendingLayoutRepair = false
+
+  const isBookmarkLoading = () => bookmarkLoadingSource.value
+
+  watch(
+    bookmarkLoadingSource,
+    async (isLoading) => {
+      if (!isLoading && pendingLayoutRepair) {
+        pendingLayoutRepair = false
+        await repairLayout()
+      }
+    }
+  )
 
   // ===== Getters =====
 
@@ -91,12 +106,10 @@ export const useHomepageStore = defineStore('homepage', () => {
   async function loadLayout(): Promise<void> {
     try {
       loading.value = true
-      DebugPanel.log('[Homepage] 📂 开始加载主页布局...')
 
       const data = await storage.getHomepageLayout()
 
       if (!data) {
-        DebugPanel.log('[Homepage] 📭 存储为空，使用默认配置')
         // 使用默认配置
         config.value = { ...DEFAULT_CONFIG }
         items.value = []
@@ -105,12 +118,10 @@ export const useHomepageStore = defineStore('homepage', () => {
 
       // T039: 数据版本兼容性检查
       if (!data.config || !data.items) {
-        DebugPanel.log('[Homepage] ❌ 数据格式错误')
         throw new Error("Invalid layout data: missing required fields")
       }
 
       if (data.config.version !== DEFAULT_CONFIG.version) {
-        DebugPanel.log('[Homepage] ⚠️ 版本不匹配，重置为默认')
         console.warn(
           `Layout version mismatch: expected ${DEFAULT_CONFIG.version}, got ${data.config.version}. Resetting to default.`
         )
@@ -122,10 +133,13 @@ export const useHomepageStore = defineStore('homepage', () => {
       // 恢复数据（storage 已经处理了 Date 反序列化）
       config.value = data.config
       items.value = data.items
-      DebugPanel.log('[Homepage] ✅ 加载完成，主页书签数:', items.value.length)
 
-      // 修复布局
-      await repairLayout()
+      // 如果书签尚未加载完成，等待加载完成后再修复布局，避免误删数据
+      if (isBookmarkLoading()) {
+        pendingLayoutRepair = true
+      } else {
+        await repairLayout()
+      }
     } catch (error) {
       console.error('Failed to load homepage layout:', error)
       // 读取失败使用默认配置
@@ -143,12 +157,10 @@ export const useHomepageStore = defineStore('homepage', () => {
    */
   async function persistLayout(): Promise<void> {
     try {
-      DebugPanel.log('[Homepage] 💾 开始保存布局，当前书签数:', items.value.length)
 
       // T040: 持久化前验证数据完整性
       const validation = validateLayout()
       if (!validation.valid) {
-        DebugPanel.log('[Homepage] ❌ 布局验证失败:', validation.errors)
         console.error("Cannot persist invalid layout:", validation.errors)
         throw new Error(`Invalid layout: ${validation.errors.join(", ")}`)
       }
@@ -160,11 +172,8 @@ export const useHomepageStore = defineStore('homepage', () => {
         items: items.value
       }
 
-      DebugPanel.log('[Homepage] 📝 准备保存:', items.value.length, '个书签项')
       await storage.saveHomepageLayout(layout)
-      DebugPanel.log('[Homepage] ✅ 保存成功')
     } catch (error) {
-      DebugPanel.log('[Homepage] ❌ 保存失败:', (error as Error).message)
       console.error('Failed to persist homepage layout:', error)
       throw error
     }
@@ -184,11 +193,9 @@ export const useHomepageStore = defineStore('homepage', () => {
       throw new Error(`Bookmark not found: ${bookmarkId}`)
     }
 
-    DebugPanel.log('[Homepage] ➕ 添加书签到主页:', bookmark.title, '| ID:', bookmarkId)
 
     // 检查是否已存在主页
     if (hasBookmark(bookmarkId)) {
-      DebugPanel.log('[Homepage] ⚠️ 书签已在主页:', bookmarkId)
       return
     }
 
@@ -200,10 +207,8 @@ export const useHomepageStore = defineStore('homepage', () => {
     }
 
     items.value.push(newItem)
-    DebugPanel.log('[Homepage] 📊 当前主页书签数:', items.value.length)
     reindexItems()
     await persistLayout()
-    DebugPanel.log('[Homepage] ✅ 添加完成')
   }
 
   /**

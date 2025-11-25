@@ -6,7 +6,6 @@
 import type { Bookmark, Category } from '@/types/bookmark'
 import type { AppConfig } from '@/types/config'
 import type { HomepageItem, HomepageLayout } from '@/types/homepage'
-import { DebugPanel } from './debug'
 
 const STORAGE_KEYS = {
   BOOKMARKS: 'navigator_bookmarks',
@@ -15,6 +14,12 @@ const STORAGE_KEYS = {
   HOMEPAGE_ITEMS: 'navigator_homepage_items',
   HOMEPAGE_LAYOUT: 'navigator_homepage_layout'
 } as const
+
+const STORAGE_LOCK_KEY = 'navigator_storage_lock'
+const DISTRIBUTED_LOCK_TIMEOUT = 4000
+const DISTRIBUTED_LOCK_HEARTBEAT = 1000
+const DISTRIBUTED_LOCK_RETRY_MIN_DELAY = 20
+const DISTRIBUTED_LOCK_RETRY_JITTER = 30
 
 export interface StorageAdapter {
   getBookmarks(): Promise<Bookmark[]>
@@ -35,10 +40,85 @@ export interface StorageAdapter {
   isInitialized(): boolean
 }
 
-class ChromeStorageManager implements StorageAdapter {
+export class ChromeStorageManager implements StorageAdapter {
   private initialized = false
   private writeLock: Promise<void> = Promise.resolve()
   private lockQueue = 0 // 统计锁队列长度（调试用）
+  private readonly instanceId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `navigator-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
+  private async delay(ms: number): Promise<void> {
+    await new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  private startLockHeartbeat(lockId: string): ReturnType<typeof setInterval> | null {
+    if (typeof setInterval === 'undefined') {
+      return null
+    }
+    return setInterval(() => {
+      this.renewDistributedLock(lockId).catch(error => {
+        console.warn('[ChromeStorage] ⚠️ 跨上下文锁续约失败:', (error as Error).message)
+      })
+    }, DISTRIBUTED_LOCK_HEARTBEAT)
+  }
+
+  private async waitForDistributedLock(lockId: string): Promise<void> {
+    let warned = false
+    const start = Date.now()
+
+    while (!(await this.tryAcquireDistributedLock(lockId))) {
+      if (!warned && import.meta.env.DEV && Date.now() - start > DISTRIBUTED_LOCK_TIMEOUT * 2) {
+        console.warn('[ChromeStorage] ⚠️ 等待跨上下文锁时间较长，可能存在僵尸锁')
+        warned = true
+      }
+
+      const jitter = Math.floor(Math.random() * DISTRIBUTED_LOCK_RETRY_JITTER)
+      await this.delay(DISTRIBUTED_LOCK_RETRY_MIN_DELAY + jitter)
+    }
+
+    return
+  }
+
+  private async tryAcquireDistributedLock(lockId: string): Promise<boolean> {
+    const now = Date.now()
+    const existing = await this.get<any>(STORAGE_LOCK_KEY)
+
+    if (existing && existing.owner && existing.owner !== lockId) {
+      const expiresAt = typeof existing.expiresAt === 'number' ? existing.expiresAt : 0
+      if (expiresAt > now) {
+        return false
+      }
+    }
+
+    await this.set(STORAGE_LOCK_KEY, {
+      owner: lockId,
+      expiresAt: now + DISTRIBUTED_LOCK_TIMEOUT
+    })
+
+    const stored = await this.get<any>(STORAGE_LOCK_KEY)
+    return stored?.owner === lockId
+  }
+
+  private async renewDistributedLock(lockId: string): Promise<void> {
+    const existing = await this.get<any>(STORAGE_LOCK_KEY)
+    if (existing?.owner !== lockId) {
+      return
+    }
+
+    await this.set(STORAGE_LOCK_KEY, {
+      owner: lockId,
+      expiresAt: Date.now() + DISTRIBUTED_LOCK_TIMEOUT
+    })
+  }
+
+  private async releaseDistributedLock(lockId: string): Promise<void> {
+    const existing = await this.get<any>(STORAGE_LOCK_KEY)
+    if (existing?.owner === lockId) {
+      await this.remove(STORAGE_LOCK_KEY)
+    }
+  }
 
   private checkChromeStorage(): void {
     if (typeof chrome === 'undefined' || !chrome.storage) {
@@ -66,13 +146,29 @@ class ChromeStorageManager implements StorageAdapter {
       console.log(`[ChromeStorage] 写操作排队中... (队列位置: ${queuePosition})`)
     }
 
+    let distributedLockId: string | null = null
+    let hasDistributedLock = false
+    let heartbeat: ReturnType<typeof setInterval> | null = null
+
     try {
       await previousLock
+      distributedLockId = `${this.instanceId}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      await this.waitForDistributedLock(distributedLockId)
+      hasDistributedLock = true
+      heartbeat = this.startLockHeartbeat(distributedLockId)
+
       if (import.meta.env.DEV && queuePosition > 1) {
         console.log(`[ChromeStorage] 写操作开始执行 (队列位置: ${queuePosition})`)
       }
       return await operation()
     } finally {
+      if (heartbeat) {
+        clearInterval(heartbeat)
+      }
+      if (distributedLockId && hasDistributedLock) {
+        await this.releaseDistributedLock(distributedLockId)
+      }
+
       this.lockQueue--
       releaseLock!()
     }
@@ -131,20 +227,7 @@ class ChromeStorageManager implements StorageAdapter {
     await this.ensureInitialized()
     const data = await this.get<any[]>(STORAGE_KEYS.BOOKMARKS)
     if (!data) {
-      DebugPanel.log('[ChromeStorage] 📭 getBookmarks: 存储为空')
       return []
-    }
-
-    DebugPanel.log('[ChromeStorage] 📦 getBookmarks: 读取', data.length, '个书签')
-
-    // 统计置顶书签数量
-    const pinnedInStorage = data.filter(raw => raw.isPinned === true).length
-    if (pinnedInStorage > 0) {
-      DebugPanel.log('[ChromeStorage] 📍 存储中有', pinnedInStorage, '个置顶书签')
-      // 显示前 3 个置顶书签的详情
-      data.filter(raw => raw.isPinned === true).slice(0, 3).forEach(raw => {
-        DebugPanel.log('[ChromeStorage] 📌', raw.title, '| isPinned =', raw.isPinned, '| pinnedAt =', raw.pinnedAt)
-      })
     }
 
     return data.map(raw => ({
@@ -167,10 +250,8 @@ class ChromeStorageManager implements StorageAdapter {
       const index = bookmarks.findIndex(b => b.id === bookmark.id)
 
       if (index >= 0) {
-        DebugPanel.log('[ChromeStorage] 🔄 saveBookmark: 更新', bookmark.title, '| isPinned =', bookmark.isPinned)
         bookmarks[index] = { ...bookmark, updatedAt: new Date() }
       } else {
-        DebugPanel.log('[ChromeStorage] ➕ saveBookmark: 新增', bookmark.title, '| isPinned =', bookmark.isPinned)
         bookmarks.push({ ...bookmark, createdAt: new Date(), updatedAt: new Date() })
       }
 
@@ -182,10 +263,6 @@ class ChromeStorageManager implements StorageAdapter {
         lastVisited: b.lastVisited?.toISOString(),
         pinnedAt: b.pinnedAt?.toISOString()
       }))
-
-      // 统计置顶书签数量
-      const pinnedCount = serialized.filter(b => b.isPinned === true).length
-      DebugPanel.log('[ChromeStorage] 💾 saveBookmark: 写入存储，共', serialized.length, '个书签，其中', pinnedCount, '个置顶')
 
       await this.set(STORAGE_KEYS.BOOKMARKS, serialized)
     })
@@ -221,16 +298,13 @@ class ChromeStorageManager implements StorageAdapter {
     await this.ensureInitialized()
     const categories = await this.get<Category[]>(STORAGE_KEYS.CATEGORIES)
     if (!categories || categories.length === 0) {
-      DebugPanel.log('[ChromeStorage] 📭 getCategories: 存储为空')
       return []
     }
-    DebugPanel.log('[ChromeStorage] 📦 getCategories: 读取', categories.length, '个分类')
     return categories
   }
 
   async saveCategories(categories: Category[]): Promise<void> {
     await this.ensureInitialized()
-    DebugPanel.log('[ChromeStorage] 💾 saveCategories: 保存', categories.length, '个分类')
     await this.set(STORAGE_KEYS.CATEGORIES, categories)
   }
 
@@ -261,12 +335,8 @@ class ChromeStorageManager implements StorageAdapter {
     const data = await this.get<any>(STORAGE_KEYS.HOMEPAGE_LAYOUT)
 
     if (!data) {
-      DebugPanel.log('[ChromeStorage] 📭 getHomepageLayout: 存储为空')
       return null
     }
-
-    const itemCount = (data.items || []).length
-    DebugPanel.log('[ChromeStorage] 📦 getHomepageLayout: 读取', itemCount, '个主页书签')
 
     return {
       config: {
@@ -296,7 +366,6 @@ class ChromeStorageManager implements StorageAdapter {
         }))
       }
 
-      DebugPanel.log('[ChromeStorage] 💾 saveHomepageLayout: 保存', serialized.items.length, '个主页书签')
       await this.set(STORAGE_KEYS.HOMEPAGE_LAYOUT, serialized)
     })
   }

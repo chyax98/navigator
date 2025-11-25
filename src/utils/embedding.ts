@@ -146,11 +146,8 @@ class EmbeddingService {
     const embeddingText = this.combineTextLayers(textLayers)
 
     const currentConfig = aiServiceManager.getConfig()
-    const shouldLimitDimensions = currentConfig.provider === 'openai'
-
     return this.generateEmbedding(embeddingText, {
-      model: currentConfig.embeddingModel,
-      dimensions: shouldLimitDimensions ? 512 : undefined
+      model: currentConfig.embeddingModel
     })
   }
 

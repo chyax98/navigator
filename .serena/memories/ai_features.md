@@ -29,7 +29,7 @@ Navigator 集成了 AI 智能增强功能，帮助用户更高效地管理书签
 - 提供推荐理由
 
 **技术实现**:
-- 使用 OpenAI API
+- 使用硅基流动（SiliconFlow）OpenAI-Compatible API
 - 温度参数: 0.3（保证稳定性）
 - 输出格式: 严格 JSON
 
@@ -46,21 +46,18 @@ Navigator 集成了 AI 智能增强功能，帮助用户更高效地管理书签
 
 ## AI 配置
 
-### OpenAI API 配置
-**环境变量**:
-- `VITE_OPENAI_API_KEY` - OpenAI API 密钥（可选）
-- `VITE_CUSTOM_API_BASE_URL` - 自定义 API 地址（如 SiliconFlow）
-- `VITE_CUSTOM_API_KEY` - 自定义 API 密钥
+### 硅基流动 API 配置
+**环境变量（开发可选）**:
+- `VITE_SILICONFLOW_API_KEY` - 默认 API 密钥
+- `VITE_SILICONFLOW_BASE_URL` - 默认 Base URL（`https://api.siliconflow.cn/v1`）
 
 **用户设置** (`src/types/config.ts`):
 ```typescript
 interface AppConfig {
-  // OpenAI 配置
-  apiKey?: string
-  apiBaseUrl?: string
-  modelName?: string
-  
-  // LinkPreview 配置
+  siliconflowApiKey?: string
+  siliconflowApiBaseUrl?: string
+  embeddingModel?: string
+  chatModel?: string
   linkPreviewApiKey?: string
 }
 ```
@@ -114,7 +111,7 @@ ${categoriesText}
 - 429: 超过速率限制
 - 降级到直接 fetch 或域名提取
 
-### OpenAI API 错误
+### 硅基流动 API 错误
 - 网络错误: 提示用户检查配置
 - 解析错误: 使用默认分类
 - 空响应: 返回空结果

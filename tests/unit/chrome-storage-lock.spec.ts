@@ -3,7 +3,7 @@
  * 测试并发写入时互斥锁能否防止数据丢失
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 
 // 模拟 Chrome Storage API with realistic delays
 function createMockChromeStorage() {

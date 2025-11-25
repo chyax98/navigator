@@ -23,7 +23,7 @@
 - **VueDraggable**: 4.1.0 - Vue 3 拖拽组件
 
 ## AI 功能
-- **OpenAI**: 6.7.0 - OpenAI API 客户端（用于智能增强）
+- **OpenAI SDK**: 6.7.0 - 通过 SiliconFlow OpenAI-Compatible API 提供智能增强
 
 ## 开发工具
 - **ESLint**: 8.55.0 - 代码质量检查

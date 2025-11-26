@@ -13,7 +13,6 @@ const searchConfig: IFuseOptions<Bookmark> = {
   keys: [
     { name: 'title', weight: 0.7 },
     { name: 'description', weight: 0.2 },
-    { name: 'notesPlainText', weight: 0.15 },
     { name: 'tags', weight: 0.1 },
     { name: 'url', weight: 0.05 }
   ],

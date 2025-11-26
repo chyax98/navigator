@@ -199,7 +199,7 @@ class FaviconCacheService {
   private getDefaultFavicon(url: string): string {
     try {
       const hostname = new URL(url).hostname
-      const letter = hostname[0].toUpperCase()
+      const letter = this.sanitizeSvgText(hostname[0].toUpperCase())
 
       // 生成简单的 SVG 图标
       const svg = `
@@ -212,6 +212,18 @@ class FaviconCacheService {
     } catch {
       return ''
     }
+  }
+
+  /**
+   * 清理SVG文本，防止XSS攻击
+   */
+  private sanitizeSvgText(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
   }
 
   /**

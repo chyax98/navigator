@@ -13,7 +13,6 @@ export interface Bookmark {
   favicon?: string
   categoryId: string
   tags: string[]
-  notes?: string
   createdAt: Date
   updatedAt: Date
   isPrivate: boolean

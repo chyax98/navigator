@@ -9,18 +9,10 @@ import type { AppConfig } from '@/types/config'
 // 开发模式使用独立数据库名称，避免和生产环境冲突
 const DB_NAME = import.meta.env.DEV ? 'NavigatorDB_Dev' : 'NavigatorDB'
 
-// 数据库结构定义（修改这里会自动触发升级）
-const DB_SCHEMA = {
-  bookmarks: { indexes: ['categoryId', 'tags', 'isPrivate'] },
-  categories: { indexes: ['parentId', 'sort', 'isPinned'] },
-  config: { indexes: [] },
-  searchIndex: { indexes: [] },
-  backups: { indexes: ['timestamp'] }
-}
 
-// 自动计算版本号：基于结构的简单哈希
-const DB_VERSION = Object.keys(DB_SCHEMA).length +
-  Object.values(DB_SCHEMA).reduce((sum, s) => sum + s.indexes.length, 0)
+
+// 使用固定的数据库版本号，避免结构变化时的递归问题
+const DB_VERSION = 1
 
 class StorageManager {
   private db: IDBDatabase | null = null
@@ -77,15 +69,8 @@ class StorageManager {
           this.db.close()
           this.db = null
 
-          // 删除损坏的数据库
-          const deleteRequest = indexedDB.deleteDatabase(DB_NAME)
-          deleteRequest.onsuccess = () => {
-            // 递归重新初始化
-            this.initDatabase().then(resolve).catch(reject)
-          }
-          deleteRequest.onerror = () => {
-            reject(new Error('Failed to delete corrupted database'))
-          }
+          // 删除损坏的数据库，但添加重试限制防止无限递归
+          this.recreateDatabase().then(resolve).catch(reject)
         } else {
           resolve()
         }
@@ -378,11 +363,46 @@ class StorageManager {
   }
 
   /**
-   * 数据导入
+   * 安全地重新创建数据库，防止无限递归
+   */
+  private async recreateDatabase(maxRetries = 2): Promise<void> {
+    if (maxRetries <= 0) {
+      throw new Error('数据库重建失败：已达最大重试次数')
+    }
+
+    return new Promise((resolve, reject) => {
+      const deleteRequest = indexedDB.deleteDatabase(DB_NAME)
+      
+      deleteRequest.onsuccess = () => {
+        // 使用新的数据库连接进行初始化
+        const newRequest = indexedDB.open(DB_NAME, DB_VERSION)
+        
+        newRequest.onsuccess = () => {
+          this.db = newRequest.result
+          resolve()
+        }
+        
+        newRequest.onerror = () => {
+          // 如果仍然失败，减少重试次数并递归调用
+          this.recreateDatabase(maxRetries - 1).then(resolve).catch(reject)
+        }
+      }
+      
+      deleteRequest.onerror = () => {
+        reject(new Error('Failed to delete corrupted database'))
+      }
+    })
+  }
+
+  /**
+   * 数据导入（添加安全验证）
    */
   async importData(jsonData: string): Promise<void> {
     try {
       const data = JSON.parse(jsonData)
+      
+      // 验证导入数据的基本结构
+      this.validateImportData(data)
 
       // 导入书签
       if (data.bookmarks && Array.isArray(data.bookmarks)) {
@@ -402,7 +422,43 @@ class StorageManager {
       }
     } catch (error) {
       console.error('Failed to import data:', error)
-      throw new Error('Invalid data format')
+      throw new Error(`数据导入失败: ${error instanceof Error ? error.message : 'Invalid data format'}`)
+    }
+  }
+
+  /**
+   * 验证导入数据的基本结构和安全性
+   */
+  private validateImportData(data: unknown): void {
+    if (!data || typeof data !== 'object') {
+      throw new Error('导入数据必须是对象')
+    }
+
+    const importData = data as any
+
+    // 验证版本信息
+    if (importData.version && typeof importData.version !== 'string') {
+      throw new Error('版本信息必须是字符串')
+    }
+
+    // 验证时间戳
+    if (importData.timestamp && typeof importData.timestamp !== 'string') {
+      throw new Error('时间戳必须是字符串')
+    }
+
+    // 验证书签数组
+    if (importData.bookmarks && !Array.isArray(importData.bookmarks)) {
+      throw new Error('书签数据必须是数组')
+    }
+
+    // 验证分类数组
+    if (importData.categories && !Array.isArray(importData.categories)) {
+      throw new Error('分类数据必须是数组')
+    }
+
+    // 验证配置对象
+    if (importData.config && typeof importData.config !== 'object') {
+      throw new Error('配置数据必须是对象')
     }
   }
 

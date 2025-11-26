@@ -39,13 +39,6 @@
           </n-ellipsis>
         </n-descriptions-item>
         <n-descriptions-item
-          v-if="bookmark.description"
-          label="描述"
-          :span="2"
-        >
-          {{ bookmark.description }}
-        </n-descriptions-item>
-        <n-descriptions-item
           v-if="bookmark.tags && bookmark.tags.length > 0"
           label="标签"
           :span="2"
@@ -68,8 +61,27 @@
         </n-descriptions-item>
       </n-descriptions>
 
-      <!-- 笔记组件 -->
-      <bookmark-notes :bookmark="bookmark" />
+      <div class="detail-description">
+        <n-text
+          depth="2"
+          class="description-label"
+        >
+          描述
+        </n-text>
+        <div
+          v-if="bookmark.description && bookmark.description.trim().length > 0"
+          class="description-content"
+        >
+          {{ bookmark.description }}
+        </div>
+        <n-text
+          v-else
+          depth="3"
+          class="description-empty"
+        >
+          暂无描述
+        </n-text>
+      </div>
     </n-space>
 
     <template #footer>
@@ -122,11 +134,11 @@ import {
   NTag,
   NEllipsis,
   NButton,
-  NIcon
+  NIcon,
+  NText
 } from 'naive-ui'
 import dayjs from 'dayjs'
 import { useBookmarkStore } from '@/stores/bookmark'
-import BookmarkNotes from './BookmarkNotes.vue'
 import type { Bookmark } from '@/types/bookmark'
 
 interface Props {
@@ -177,3 +189,32 @@ function close() {
   showModal.value = false
 }
 </script>
+
+<style scoped>
+.detail-description {
+  border: 1px solid var(--n-border-color);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--n-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.description-label {
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.description-content {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--n-text-color);
+  white-space: pre-line;
+}
+
+.description-empty {
+  font-size: 12px;
+}
+</style>

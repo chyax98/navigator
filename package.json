@@ -17,6 +17,7 @@
   "dependencies": {
     "@vicons/ionicons5": "^0.13.0",
     "@vueuse/core": "^10.7.0",
+    "@webcomponents/custom-elements": "^1.6.0",
     "dayjs": "^1.11.10",
     "dompurify": "^3.3.0",
     "fuse.js": "^7.0.0",

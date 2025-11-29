@@ -23,6 +23,9 @@ export default defineConfig({
     rollupOptions: {
       input: {
         newtab: resolve(__dirname, 'extension/index.html')
+      },
+      output: {
+        sourcemap: false
       }
     },
     terserOptions: {
